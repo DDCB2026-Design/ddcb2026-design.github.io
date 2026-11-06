@@ -88,7 +88,7 @@ function header(){
 }
 function storeView(){
   var d=S.delivery||{};
-  var delTxt=d.mode==='district'?'Delivery según distrito':'Delivery '+money(d.flat)+' a todo Lima';
+  var delTxt=d.mode==='district'?'Delivery según distrito':'Delivery '+money(d.flat)+' a toda Lima Metropolitana';
   var cs=cats();
   var tiles='<div class="wrap tiles" role="group" aria-label="Categorías">'+['Todas'].concat(cs).map(function(c){
     var img=c==='Todas'?S.heroImg:(S.catImgs||{})[c],n=c==='Todas'?PRODUCTS.length:PRODUCTS.filter(function(p){return p.cat===c}).length;

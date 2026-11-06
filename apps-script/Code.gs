@@ -12,7 +12,7 @@
 
 var TZ = 'America/Lima';
 var TIENDA = 'ABAS-TCT';
-var DELIVERY = 10;      // S/ por pedido
+var DELIVERY = 12;      // S/ por pedido (toda Lima Metropolitana)
 var MINIMO = 50;        // S/ mínimo, incluye delivery
 var ESTADOS = ['Pago en validación', 'Pago validado', 'Por preparar', 'Preparado', 'En ruta', 'Entregado', 'Observado', 'Pago rechazado', 'Cancelado'];
 var FRANJAS = ['Mañana (9 a 12)', 'Tarde (12 a 4)', 'Noche (4 a 8)'];

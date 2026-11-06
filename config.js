@@ -13,7 +13,7 @@ window.ABAS_CONFIG = {
     yapeNumber: "",                 // ej. "987609561"
     yapeName: "",                   // titular tal como aparece en Yape
     yapeQR: "",                     // ej. "img/yape-qr.png" (sube la imagen a la carpeta img)
-    delivery: { mode: "flat", flat: 10, districts: [] },  // tarifa por distrito: mode "district", districts: [{name:"Miraflores", cost:12}]
+    delivery: { mode: "flat", flat: 12, districts: [] },  // tarifa por distrito: mode "district", districts: [{name:"Miraflores", cost:12}]
     pickup: false, pickupAddress: "", minOrder: 50,   // mínimo en S/, incluye el delivery
     logo: "img/logo.jpg", heroImg: "img/hero.jpg",
     catOrder: ["Frutos secos","Pasas y deshidratados","Semillas y granos","Especias","Conservas"],
