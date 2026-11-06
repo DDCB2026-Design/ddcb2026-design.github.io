@@ -86,6 +86,11 @@ function header(){
    (st.view==='store'?'<button class="btn ghost sm" data-act="track">Mi pedido</button>':'')+(st.view==='store'?'<button class="btn navy" data-act="openCart" aria-label="Abrir carrito"><span class="lbl">Carrito</span><span class="badge num">'+n+'</span></button>':'')+
   '</div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i></div></header>';
 }
+var IC={
+ pay:'<span class="paychips" aria-hidden="true"><b class="py">Yape</b><b class="pl">Plin</b></span>',
+ moto:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M8.5 17h5l3-6h-3.5"/><path d="M5.5 17l3-6h4l1.5 3"/><path d="M14 7h2.5l2 10"/><path d="M8 8.5h3"/></svg>',
+ bag:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="M9.5 14.5l1.8 1.8 3.4-3.6"/></svg>'
+};
 function storeView(){
   var d=S.delivery||{};
   var delTxt=d.mode==='district'?'Delivery según distrito':'Delivery '+money(d.flat)+' a toda Lima Metropolitana';
@@ -96,10 +101,10 @@ function storeView(){
   return '<div class="searchbar"><div class="wrap"><input id="q" type="search" placeholder="Buscar pecanas, almendras, pasas…" value="'+esc(st.q)+'" aria-label="Buscar producto"></div></div>'+
    '<section class="wrap"><div class="hero"><div class="copy"><span class="eyebrow">Frutos secos · Deshidratados · Semillas · Especias</span>'+
     '<h2>'+esc(S.tagline||'Frutos secos frescos, directo a tu casa')+'</h2>'+
-    '<p>Elige tus productos, paga con Yape y recibe tu pedido en Lima.</p>'+
-    '<div class="perks"><span class="perk"><i class="y"></i>Paga con Yape</span><span class="perk"><i></i>'+esc(delTxt)+'</span>'+(S.pickup?'<span class="perk"><i></i>Recojo sin costo</span>':'')+(Number(S.minOrder)>0?'<span class="perk"><i></i>Pedido mínimo '+money(S.minOrder)+'</span>':'')+'</div></div>'+
+    '<p>Elige tus productos, paga con Yape o Plin y recibe tu pedido en Lima.</p>'+
+    '<div class="perks"><span class="perk">'+IC.pay+'Paga con Yape o Plin</span><span class="perk">'+IC.moto+esc(delTxt)+'</span>'+(S.pickup?'<span class="perk">Recojo sin costo</span>':'')+(Number(S.minOrder)>0?'<span class="perk">'+IC.bag+'Pedido mínimo '+money(S.minOrder)+' (incluye delivery)</span>':'')+'</div></div>'+
     '<div class="pic">'+(S.heroImg?'<img src="'+esc(S.heroImg)+'" alt="Variedad de frutos secos">':'')+'</div></div>'+
-    '<div class="strip"><div style="background:var(--c1)"><b>1</b>Elige</div><div style="background:var(--c2)"><b>2</b>Paga con Yape</div><div style="background:var(--c4)"><b>3</b>Envía por WhatsApp</div><div style="background:var(--navy)"><b>4</b>Recibe en casa</div></div></section>'+tiles+
+    '<div class="strip"><div style="background:var(--c1)"><b>1</b>Elige</div><div style="background:var(--c2)"><b>2</b><span class="full">Paga con Yape o Plin</span><span class="short">Yape / Plin</span></div><div style="background:var(--c4)"><b>3</b><span class="full">Envía por WhatsApp</span><span class="short">WhatsApp</span></div><div style="background:var(--navy)"><b>4</b><span class="full">Recibe en casa</span><span class="short">Recibe</span></div></div></section>'+tiles+
    '<main class="wrap" id="list">'+listHtml()+'</main>'+
    '<footer class="foot"><div class="wrap"><b>'+esc(S.storeName)+'</b><span>Catálogo actualizado'+(DATA.publishedAt?' el '+esc(fmtDate(DATA.publishedAt)):'')+'. Precios en soles.</span>'+(S.whatsapp?'<span>Pedidos y consultas por WhatsApp: <a style="color:#fff;font-weight:800" href="'+esc(waLink('Hola ABAS-TCT'))+'" target="_blank" rel="noopener">'+esc(String(S.whatsapp).replace(/^51/,'').replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3'))+'</a></span>':'')+'</div></footer>';
 }
@@ -143,7 +148,7 @@ function deliveryDate(){var d=limaNow();d.setHours(12,0,0,0);d.setDate(d.getDate
 function fmtDay(d){return DIAS[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}
 function minMissing(){var m=Number(S.minOrder)||0;if(!m)return 0;return r2(Math.max(0,m-(subtotal()+(deliveryCost()||0))))}
 function drawer(){
-  var title={cart:'Tu pedido',form:'Datos de entrega',yape:'Paga con Yape',track:'Consulta tu pedido'}[st.step]||'Tu pedido';
+  var title={cart:'Tu pedido',form:'Datos de entrega',yape:'Paga con Yape o Plin',track:'Consulta tu pedido'}[st.step]||'Tu pedido';
   var body='',foot='';
   var lines=cartLines(),sub=subtotal(),del=deliveryCost(),total=r2(sub+(del||0));
   if(st.step==='track'){
@@ -181,16 +186,16 @@ function drawer(){
   } else {
     var o=st.order,sent=st.sent||{};
     var wa=S.whatsapp?waLink(buildMsg(o)):'';
-    body='<div class="yape"><span class="eyebrow">Pedido '+esc(o.code)+'</span><div>Yapea exactamente</div><div class="amt num">'+money(o.total)+'</div>'+
+    body='<div class="yape"><span class="eyebrow">Pedido '+esc(o.code)+'</span><div>Paga exactamente</div><div class="amt num">'+money(o.total)+'</div>'+
       (S.yapeQR?'<img src="'+esc(S.yapeQR)+'" alt="Código QR de Yape">':'')+
-      (S.yapeNumber?'<div class="copyrow"><code class="num">'+esc(S.yapeNumber)+'</code><button class="btn sm" data-act="copy" data-v="'+esc(S.yapeNumber)+'">Copiar número</button></div>':'<p class="note">El número de Yape aún no está configurado.</p>')+
-      (S.yapeName?'<div class="note">A nombre de <b>'+esc(S.yapeName)+'</b></div>':'')+'</div>';
+      (S.yapeNumber?'<div class="copyrow"><code class="num">'+esc(S.yapeNumber)+'</code><button class="btn sm" data-act="copy" data-v="'+esc(S.yapeNumber)+'">Copiar número</button></div>':'<p class="note">El número para pagar aún no está configurado.</p>')+
+      '<div class="note">Desde Yape o Plin al mismo número'+(S.yapeName?' · a nombre de <b>'+esc(S.yapeName)+'</b>':'')+'</div>'+'</div>';
     if(sent.ok){
       body+='<div class="yape" style="border-color:var(--c3);text-align:left"><span class="eyebrow" style="color:var(--c3)">Pedido registrado ✓</span><div>Tu pedido <b>'+esc(sent.code)+'</b> quedó registrado con entrega estimada el <b>'+esc(sent.entrega||fmtDay(deliveryDate()))+'</b>.</div><div class="note">Último paso: envíanos la captura de tu Yape por WhatsApp. Te confirmaremos el pago, el día y la franja de entrega por ese medio. Guarda tu código para consultar el estado en "Mi pedido".</div></div>';
       foot=(wa?'<a class="btn primary" style="background:var(--wa);border-color:var(--wa)" href="'+esc(wa)+'" target="_blank" rel="noopener">Enviar captura por WhatsApp</a>':'')+'<button class="btn ghost" data-act="newOrder">Terminar</button>';
     } else {
-      body+='<ol class="steps"><li>Paga '+money(o.total)+' por Yape al número o QR de arriba.</li><li>Escribe el número de operación de tu constancia.</li><li>Pulsa "Ya pagué" y envíanos la captura por WhatsApp.</li></ol>'+
-        '<div class="field"><label for="f-op">N° de operación Yape</label><input id="f-op" data-f="op" inputmode="numeric" value="'+esc(st.form.op)+'" placeholder="Ej. 12345678">'+(st.errors.op?'<span class="err">'+esc(st.errors.op)+'</span>':'')+'</div>'+
+      body+='<ol class="steps"><li>Paga '+money(o.total)+' por Yape o Plin al número de arriba.</li><li>Escribe el número de operación de tu constancia.</li><li>Pulsa "Ya pagué" y envíanos la captura por WhatsApp.</li></ol>'+
+        '<div class="field"><label for="f-op">N° de operación (Yape o Plin)</label><input id="f-op" data-f="op" inputmode="numeric" value="'+esc(st.form.op)+'" placeholder="Ej. 12345678">'+(st.errors.op?'<span class="err">'+esc(st.errors.op)+'</span>':'')+'</div>'+
         '<input type="text" id="f-web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px" value="">'+
         (sent.err?'<p class="field"><span class="err">'+esc(sent.err)+'</span></p>':'');
       foot=CFG.apiUrl&&!sent.err?'<button class="btn primary" data-act="submitOrder" '+(sent.busy?'disabled':'')+'>'+(sent.busy?'Registrando…':'Ya pagué · Registrar pedido')+'</button>':
@@ -208,12 +213,12 @@ function buildMsg(o){
   var code=(st.sent&&st.sent.code)||o.code;
   var L=['Hola, envío mi pedido.','Ref: '+code,''];
   o.items.forEach(function(i){L.push('• '+i.qty+' × '+i.name+' '+gLabel(i.g)+' — '+money(i.sub))});
-  L.push('','Productos: '+money(o.subtotal),'Delivery: '+money(o.delivery),'Total: '+money(o.total),'Pago: Yape'+(st.form.op?' · Op. '+st.form.op:''),'',
+  L.push('','Productos: '+money(o.subtotal),'Delivery: '+money(o.delivery),'Total: '+money(o.total),'Pago: Yape/Plin'+(st.form.op?' · Op. '+st.form.op:''),'',
     'Cliente: '+o.customer,'Celular: '+o.phone,'Distrito: '+o.district,'Dirección: '+o.address);
   if(o.ref)L.push('Referencia: '+o.ref);
   L.push('Entrega estimada: '+o.entrega+(o.when?' · '+o.when:''));
   if(o.notes)L.push('Comentario: '+o.notes);
-  L.push('','Adjunto la captura del Yape.');
+  L.push('','Adjunto la captura del pago.');
   return L.join('\n');
 }
 function confirmOrder(){
@@ -230,7 +235,7 @@ function confirmOrder(){
 }
 function submitOrder(){
   var op=String(st.form.op||'').replace(/\s/g,'');
-  if(op.length<4){st.errors={op:'Escribe el número de operación que aparece en tu constancia de Yape.'};render();return}
+  if(op.length<4){st.errors={op:'Escribe el número de operación que aparece en tu constancia de Yape o Plin.'};render();return}
   st.errors={};st.sent={busy:true};render();
   var o=st.order,hp=($('#f-web')||{}).value||'';
   var ctl=window.AbortController?new AbortController():null,timer=setTimeout(function(){ctl&&ctl.abort()},20000);

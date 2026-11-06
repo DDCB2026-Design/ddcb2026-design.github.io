@@ -198,3 +198,11 @@ td.prices b{color:var(--fg)}
 @media (prefers-reduced-motion: reduce){.ph img,.tile .im img{transition:none}}
 @media (max-width:860px){.hero{grid-template-columns:1fr;min-height:0}.hero .pic{order:-1;aspect-ratio:16/5}.tiles{grid-template-columns:repeat(6,minmax(118px,1fr));overflow-x:auto}.strip{display:flex}.strip div{flex:1 1 auto;font-size:10.5px;padding:6px 6px;gap:3px;overflow:visible}.strip b{background:none;width:auto;height:auto;font-size:11px}.hero .eyebrow{display:none}.perk{font-size:12px;padding:5px 8px}}
 @media (max-width:560px){.wa{padding:0}.wa span{display:none}.soon{grid-template-columns:1fr}.soon img{min-height:0;aspect-ratio:16/7}.top .btn .lbl{display:none}.logo img{height:46px}.pres button{flex:1 1 0;padding:4px 2px;font-size:11px}.cartbar button{font-size:12px}.cartbar b{font-size:20px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.price{font-size:18px}.hero .copy{padding:22px 18px}.buy{flex-direction:column;align-items:stretch}.add{width:100%}.qty{justify-content:space-between}.card h3{font-size:14px}.sec-h h2{font-size:17px}.hero .copy{padding:16px}.hero h2{font-size:21px}}
+
+.perk .ic{width:20px;height:20px;color:var(--c3);flex:none}
+.paychips{display:inline-flex;gap:3px}
+.paychips b{font-family:var(--body);font-size:10px;font-weight:800;color:#fff;padding:2px 5px;letter-spacing:.02em}
+.paychips .py{background:#742284}.paychips .pl{background:#00a5b5}
+.perk{gap:7px}
+.strip .short{display:none}
+@media (max-width:560px){.strip .full{display:none}.strip .short{display:inline}}
