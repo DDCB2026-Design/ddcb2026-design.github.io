@@ -32,6 +32,7 @@ function variantOf(key){var i=key.lastIndexOf('@'),p=byId[key.slice(0,i)],g=Numb
 var st={view:'store',cat:'Todas',q:'',sel:{},drawer:false,step:'cart',isAdmin:false,tab:'productos',order:null,errors:{},
   form:{name:'',phone:'',method:'delivery',district:'',address:'',ref:'',when:'',notes:'',op:''}};
 try{var f=JSON.parse(localStorage.getItem('fs-form')||'null');if(f)Object.assign(st.form,f)}catch(e){}
+st.form.method='delivery';
 
 var app=$('#app');
 
@@ -82,7 +83,7 @@ function header(){
   return '<header class="top"><div class="wrap">'+
    '<div class="logo">'+(S.logo?'<img src="'+esc(S.logo)+'" alt="'+esc(S.storeName)+'">':esc(S.storeName))+(st.view==='admin'?'<small>Panel de administración</small>':'')+'</div>'+
    (st.isAdmin?'<button class="btn sm ghost" data-act="toggleAdmin">'+(st.view==='admin'?'Ver tienda':'Administrar')+'</button>':'')+
-   (st.view==='store'?'<button class="btn navy" data-act="openCart" aria-label="Abrir carrito"><span class="lbl">Carrito</span><span class="badge num">'+n+'</span></button>':'')+
+   (st.view==='store'?'<button class="btn ghost sm" data-act="track">Mi pedido</button>':'')+(st.view==='store'?'<button class="btn navy" data-act="openCart" aria-label="Abrir carrito"><span class="lbl">Carrito</span><span class="badge num">'+n+'</span></button>':'')+
   '</div><div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i></div></header>';
 }
 function storeView(){
@@ -134,56 +135,83 @@ function cartBar(){return '<div class="cartbar"><button data-act="openCart"><spa
 function fmtDate(iso){try{return new Date(iso).toLocaleDateString('es-PE',{day:'numeric',month:'long',year:'numeric'})}catch(e){return ''}}
 
 /* ---------- drawer ---------- */
+var CFG=window.ABAS_CONFIG||{};
+var FRANJAS=CFG.franjas||['Mañana (9 a 12)','Tarde (12 a 4)','Noche (4 a 8)'];
+var DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function limaNow(){var d=new Date();return new Date(d.getTime()+d.getTimezoneOffset()*60000-5*3600000)}
+function deliveryDate(){var d=limaNow();d.setHours(12,0,0,0);d.setDate(d.getDate()+1);if(d.getDay()===0)d.setDate(d.getDate()+1);return d}
+function fmtDay(d){return DIAS[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}
+function minMissing(){var m=Number(S.minOrder)||0;if(!m)return 0;return r2(Math.max(0,m-(subtotal()+(deliveryCost()||0))))}
 function drawer(){
-  var title=st.step==='cart'?'Tu pedido':st.step==='form'?'Datos de entrega':'Paga con Yape';
+  var title={cart:'Tu pedido',form:'Datos de entrega',yape:'Paga con Yape',track:'Consulta tu pedido'}[st.step]||'Tu pedido';
   var body='',foot='';
   var lines=cartLines(),sub=subtotal(),del=deliveryCost(),total=r2(sub+(del||0));
-  if(st.step==='cart'){
+  if(st.step==='track'){
+    var T=st.track||{};
+    body='<p class="note" style="margin:0">Escribe el código de tu pedido (ej. FS-1106-4821) y los 4 últimos dígitos de tu celular.</p>'+
+      '<div class="field"><label for="t-code">Código del pedido</label><input id="t-code" data-t="code" value="'+esc(T.code||'')+'" autocapitalize="characters" placeholder="FS-…"></div>'+
+      '<div class="field"><label for="t-tel">Últimos 4 dígitos de tu celular</label><input id="t-tel" data-t="tel" inputmode="numeric" maxlength="4" value="'+esc(T.tel||'')+'"></div>'+
+      (T.busy?'<p class="note">Buscando…</p>':'')+
+      (T.err?'<p class="field"><span class="err">'+esc(T.err)+'</span></p>':'')+
+      (T.res?'<div class="yape" style="border-color:var(--c3);text-align:left"><span class="eyebrow">Pedido '+esc(T.res.code)+'</span><div style="font-family:var(--display);font-size:22px;font-weight:800;color:var(--c3)">'+esc(T.res.estado)+'</div>'+
+        '<div>Total: <b class="num">'+money(T.res.total)+'</b></div>'+
+        (T.res.entrega?'<div>Entrega '+(T.res.confirmada?'confirmada':'estimada')+': <b>'+esc(T.res.entrega)+'</b>'+(T.res.franja?' · '+esc(T.res.franja):'')+'</div>':'')+
+        (T.res.nota?'<div class="note">'+esc(T.res.nota)+'</div>':'')+'</div>':'');
+    foot='<button class="btn primary" data-act="doTrack" '+(T.busy?'disabled':'')+'>Consultar</button>';
+  } else if(st.step==='cart'){
     body=lines.length?lines.map(function(l){return '<div class="line"><div class="th">'+(l.img?'<img src="'+esc(l.img)+'" alt="">':'')+'</div><div><div class="n">'+esc(l.name)+'</div><div class="m">'+gLabel(l.g)+' · '+money(l.price)+'</div></div>'+
       '<div style="text-align:right"><span class="step"><button data-act="dec" data-k="'+esc(l.key)+'" aria-label="Quitar uno">−</button><span class="num">'+l.qty+'</span><button data-act="inc" data-k="'+esc(l.key)+'" aria-label="Agregar uno">+</button></span><div class="num" style="font-weight:800;margin-top:4px">'+money(l.sub)+'</div></div></div>'}).join('')
       :'<p class="empty">Tu carrito está vacío.</p>';
-    var minOk=!(Number(S.minOrder)>0&&sub<Number(S.minOrder));
-    foot=lines.length?totals(sub,del,total)+(minOk?'':'<p class="note">El pedido mínimo es '+money(S.minOrder)+'.</p>')+'<button class="btn primary" data-act="toForm" '+(minOk?'':'disabled')+'>Continuar</button>':'';
+    var miss=minMissing();
+    foot=lines.length?totals(sub,del,total)+(miss>0?'<p class="note" style="margin:0;color:var(--c2);font-weight:700">Pedido mínimo '+money(S.minOrder)+' (incluye delivery). Te faltan '+money(miss)+'.</p>':'')+'<button class="btn primary" data-act="toForm" '+(miss>0?'disabled':'')+'>Continuar</button>':'';
   } else if(st.step==='form'){
     var F=st.form,E=st.errors,d=S.delivery||{};
     body='<div class="form">'+
-      (S.pickup?'<div class="seg" role="group" aria-label="Tipo de entrega"><button data-act="method" data-v="delivery" aria-pressed="'+(F.method==='delivery')+'">Delivery</button><button data-act="method" data-v="pickup" aria-pressed="'+(F.method==='pickup')+'">Recojo</button></div>':'')+
       fld('name','Nombre y apellido','text','name',F.name,E.name)+
       fld('phone','Celular (WhatsApp)','tel','tel',F.phone,E.phone)+
-      (F.method==='pickup'?'<p class="note">Recojo en: '+esc(S.pickupAddress||'se coordina por WhatsApp')+'</p>':
-        (d.mode==='district'?'<div class="field"><label for="f-district">Distrito</label><select id="f-district" data-f="district"><option value="">Elige tu distrito</option>'+(d.districts||[]).map(function(z){return '<option '+(z.name===F.district?'selected':'')+' value="'+esc(z.name)+'">'+esc(z.name)+' · '+money(z.cost)+'</option>'}).join('')+'</select>'+(E.district?'<span class="err">'+esc(E.district)+'</span>':'')+'</div>'
+      (d.mode==='district'?'<div class="field"><label for="f-district">Distrito</label><select id="f-district" data-f="district"><option value="">Elige tu distrito</option>'+(d.districts||[]).map(function(z){return '<option '+(z.name===F.district?'selected':'')+' value="'+esc(z.name)+'">'+esc(z.name)+' · '+money(z.cost)+'</option>'}).join('')+'</select>'+(E.district?'<span class="err">'+esc(E.district)+'</span>':'')+'</div>'
           :fld('district','Distrito','text','address-level2',F.district,E.district))+
-        fld('address','Dirección','text','street-address',F.address,E.address)+
-        fld('ref','Referencia (opcional)','text','off',F.ref)+
-        '<div class="field"><label for="f-when">Horario preferido (opcional)</label><select id="f-when" data-f="when">'+['','Mañana (9 a 12)','Tarde (12 a 4)','Noche (4 a 8)'].map(function(o){return '<option '+(o===F.when?'selected':'')+' value="'+esc(o)+'">'+(o||'Cualquier hora')+'</option>'}).join('')+'</select></div>')+
+      fld('address','Dirección','text','street-address',F.address,E.address)+
+      fld('ref','Referencia (opcional)','text','off',F.ref)+
+      '<div class="field"><label for="f-when">Franja preferida</label><select id="f-when" data-f="when"><option value="">Cualquier hora</option>'+FRANJAS.map(function(o){return '<option '+(o===F.when?'selected':'')+' value="'+esc(o)+'">'+esc(o)+'</option>'}).join('')+'</select></div>'+
+      '<div class="yape" style="border-color:var(--c3);padding:10px 12px;text-align:left;gap:4px"><span>Entrega estimada: <b>'+fmtDay(deliveryDate())+'</b></span><span class="note">Repartimos al día siguiente de tu compra (compras del sábado, el lunes). Confirmamos día y franja al validar tu pago.</span></div>'+
       '<div class="field"><label for="f-notes">Comentario (opcional)</label><textarea id="f-notes" data-f="notes" rows="2">'+esc(F.notes)+'</textarea></div>'+
     '</div>';
     foot=totals(sub,del,total)+'<div class="toolbar"><button class="btn ghost" data-act="toCart">Atrás</button><button class="btn primary" style="flex:1" data-act="confirm">Ir a pagar '+money(total)+'</button></div>';
   } else {
-    var o=st.order;
-    var wa=S.whatsapp?'https://wa.me/'+String(S.whatsapp).replace(/\D/g,'')+'?text='+encodeURIComponent(buildMsg(o)):'';
+    var o=st.order,sent=st.sent||{};
+    var wa=S.whatsapp?waLink(buildMsg(o)):'';
     body='<div class="yape"><span class="eyebrow">Pedido '+esc(o.code)+'</span><div>Yapea exactamente</div><div class="amt num">'+money(o.total)+'</div>'+
       (S.yapeQR?'<img src="'+esc(S.yapeQR)+'" alt="Código QR de Yape">':'')+
       (S.yapeNumber?'<div class="copyrow"><code class="num">'+esc(S.yapeNumber)+'</code><button class="btn sm" data-act="copy" data-v="'+esc(S.yapeNumber)+'">Copiar número</button></div>':'<p class="note">El número de Yape aún no está configurado.</p>')+
-      (S.yapeName?'<div class="note">A nombre de <b>'+esc(S.yapeName)+'</b></div>':'')+'</div>'+
-      '<ol class="steps"><li>Paga '+money(o.total)+' por Yape al número o QR de arriba.</li><li>Escribe el número de operación de tu constancia.</li><li>Envía el pedido por WhatsApp y adjunta la captura. Validamos el pago y despachamos.</li></ol>'+
-      '<div class="field"><label for="f-op">N° de operación Yape</label><input id="f-op" data-f="op" inputmode="numeric" value="'+esc(st.form.op)+'" placeholder="Ej. 12345678"></div>'+
-      '<details><summary class="note">Ver el mensaje del pedido</summary><div class="msg" id="msgtxt">'+esc(buildMsg(o))+'</div><button class="btn sm" data-act="copy" data-v="__msg" style="margin-top:6px">Copiar mensaje</button></details>';
-    foot=(wa?'<a class="btn primary" id="walink" href="'+esc(wa)+'" target="_blank" rel="noopener">Ya pagué · Enviar por WhatsApp</a><p class="note" style="margin:0">Si WhatsApp no se abre, copia el mensaje y envíalo al '+esc(S.whatsapp)+'.</p>':'<p class="note">Falta configurar el WhatsApp de la tienda.</p>')+
-      '<button class="btn ghost" data-act="newOrder">Terminar y vaciar carrito</button>';
+      (S.yapeName?'<div class="note">A nombre de <b>'+esc(S.yapeName)+'</b></div>':'')+'</div>';
+    if(sent.ok){
+      body+='<div class="yape" style="border-color:var(--c3);text-align:left"><span class="eyebrow" style="color:var(--c3)">Pedido registrado ✓</span><div>Tu pedido <b>'+esc(sent.code)+'</b> quedó registrado con entrega estimada el <b>'+esc(sent.entrega||fmtDay(deliveryDate()))+'</b>.</div><div class="note">Último paso: envíanos la captura de tu Yape por WhatsApp. Te confirmaremos el pago, el día y la franja de entrega por ese medio. Guarda tu código para consultar el estado en "Mi pedido".</div></div>';
+      foot=(wa?'<a class="btn primary" style="background:var(--wa);border-color:var(--wa)" href="'+esc(wa)+'" target="_blank" rel="noopener">Enviar captura por WhatsApp</a>':'')+'<button class="btn ghost" data-act="newOrder">Terminar</button>';
+    } else {
+      body+='<ol class="steps"><li>Paga '+money(o.total)+' por Yape al número o QR de arriba.</li><li>Escribe el número de operación de tu constancia.</li><li>Pulsa "Ya pagué" y envíanos la captura por WhatsApp.</li></ol>'+
+        '<div class="field"><label for="f-op">N° de operación Yape</label><input id="f-op" data-f="op" inputmode="numeric" value="'+esc(st.form.op)+'" placeholder="Ej. 12345678">'+(st.errors.op?'<span class="err">'+esc(st.errors.op)+'</span>':'')+'</div>'+
+        '<input type="text" id="f-web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px" value="">'+
+        (sent.err?'<p class="field"><span class="err">'+esc(sent.err)+'</span></p>':'');
+      foot=CFG.apiUrl&&!sent.err?'<button class="btn primary" data-act="submitOrder" '+(sent.busy?'disabled':'')+'>'+(sent.busy?'Registrando…':'Ya pagué · Registrar pedido')+'</button>':
+        (wa?'<a class="btn primary" style="background:var(--wa);border-color:var(--wa)" href="'+esc(wa)+'" target="_blank" rel="noopener">Ya pagué · Enviar por WhatsApp</a>':'<p class="note">Falta configurar el WhatsApp de la tienda.</p>');
+      foot+='<button class="btn ghost" data-act="toForm">Atrás</button>';
+    }
   }
   return '<div class="scrim" data-act="closeCart"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header><h2>'+esc(title)+'</h2><button class="btn ghost sm" data-act="closeCart" aria-label="Cerrar">Cerrar</button></header><div class="scroll">'+body+'</div>'+(foot?'<footer>'+foot+'</footer>':'')+'</aside>';
 }
 function fld(k,label,type,ac,v,err){return '<div class="field"><label for="f-'+k+'">'+esc(label)+'</label><input id="f-'+k+'" type="'+type+'" autocomplete="'+ac+'" data-f="'+k+'" value="'+esc(v)+'">'+(err?'<span class="err">'+esc(err)+'</span>':'')+'</div>'}
-function totals(sub,del,total){return '<div class="tot num"><span>Productos</span><span>'+money(sub)+'</span><span>'+(st.form.method==='pickup'?'Recojo':'Delivery')+'</span><span>'+(del==null?'Elige distrito':money(del))+'</span><span class="big">Total</span><span class="big">'+money(total)+'</span></div>'}
+function totals(sub,del,total){return '<div class="tot num"><span>Productos</span><span>'+money(sub)+'</span><span>Delivery</span><span>'+(del==null?'Elige distrito':money(del))+'</span><span class="big">Total</span><span class="big">'+money(total)+'</span></div>'}
 
-function makeCode(){var d=new Date();return 'FS-'+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+Math.floor(1000+Math.random()*9000)}
+function makeCode(){var d=limaNow();return 'FS-'+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+Math.floor(1000+Math.random()*9000)}
 function buildMsg(o){
-  var L=['Hola, quiero hacer este pedido.','Ref: '+o.code,''];
+  var code=(st.sent&&st.sent.code)||o.code;
+  var L=['Hola, envío mi pedido.','Ref: '+code,''];
   o.items.forEach(function(i){L.push('• '+i.qty+' × '+i.name+' '+gLabel(i.g)+' — '+money(i.sub))});
-  L.push('','Productos: '+money(o.subtotal),(o.method==='pickup'?'Recojo: ':'Delivery: ')+money(o.delivery),'Total: '+money(o.total),'Pago: Yape'+(st.form.op?' · Op. '+st.form.op:''),'',
-    'Cliente: '+o.customer,'Celular: '+o.phone,'Entrega: '+(o.method==='pickup'?'Recojo':'Delivery'));
-  if(o.method!=='pickup'){L.push('Distrito: '+o.district,'Dirección: '+o.address);if(o.ref)L.push('Referencia: '+o.ref);if(o.when)L.push('Horario: '+o.when)}
+  L.push('','Productos: '+money(o.subtotal),'Delivery: '+money(o.delivery),'Total: '+money(o.total),'Pago: Yape'+(st.form.op?' · Op. '+st.form.op:''),'',
+    'Cliente: '+o.customer,'Celular: '+o.phone,'Distrito: '+o.district,'Dirección: '+o.address);
+  if(o.ref)L.push('Referencia: '+o.ref);
+  L.push('Entrega estimada: '+o.entrega+(o.when?' · '+o.when:''));
   if(o.notes)L.push('Comentario: '+o.notes);
   L.push('','Adjunto la captura del Yape.');
   return L.join('\n');
@@ -192,12 +220,41 @@ function confirmOrder(){
   var F=st.form,E={};
   if(F.name.trim().length<3)E.name='Escribe tu nombre y apellido.';
   if(String(F.phone).replace(/\D/g,'').length<9)E.phone='Escribe un celular de 9 dígitos.';
-  if(F.method!=='pickup'){if(!F.district.trim())E.district='Indica tu distrito.';if(F.address.trim().length<5)E.address='Escribe tu dirección.'}
+  if(!F.district.trim())E.district='Indica tu distrito.';
+  if(F.address.trim().length<5)E.address='Escribe tu dirección.';
   st.errors=E;if(Object.keys(E).length){render();return}
   var lines=cartLines(),sub=subtotal(),del=deliveryCost()||0;
-  var o={code:makeCode(),createdAt:new Date().toISOString(),customer:F.name.trim(),phone:F.phone.trim(),method:F.method,district:F.method==='pickup'?'':F.district.trim(),address:F.method==='pickup'?'':F.address.trim(),ref:F.ref.trim(),when:F.when,notes:F.notes.trim(),
-    items:lines.map(function(l){return {id:l.id,name:l.name,g:l.g,qty:l.qty,price:l.price,sub:l.sub}}),subtotal:sub,delivery:del,total:r2(sub+del),status:'Pago pendiente',source:'web'};
-  st.order=o;st.step='yape';render();
+  st.order={code:makeCode(),customer:F.name.trim(),phone:F.phone.trim(),district:F.district.trim(),address:F.address.trim(),ref:F.ref.trim(),when:F.when,notes:F.notes.trim(),entrega:fmtDay(deliveryDate()),
+    items:lines.map(function(l){return {name:l.name,g:l.g,qty:l.qty,price:l.price,sub:l.sub}}),subtotal:sub,delivery:del,total:r2(sub+del)};
+  st.sent={};st.step='yape';render();
+}
+function submitOrder(){
+  var op=String(st.form.op||'').replace(/\s/g,'');
+  if(op.length<4){st.errors={op:'Escribe el número de operación que aparece en tu constancia de Yape.'};render();return}
+  st.errors={};st.sent={busy:true};render();
+  var o=st.order,hp=($('#f-web')||{}).value||'';
+  var ctl=window.AbortController?new AbortController():null,timer=setTimeout(function(){ctl&&ctl.abort()},20000);
+  fetch(CFG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({},o,{op:op,website:hp})),signal:ctl?ctl.signal:undefined})
+    .then(function(r){return r.json()}).then(function(res){
+      clearTimeout(timer);
+      if(!res.ok)throw new Error(res.error||'error');
+      st.sent={ok:true,code:res.code,entrega:res.entrega};o.code=res.code;
+      if(res.total!=null)o.total=res.total;
+      render();
+    }).catch(function(){
+      clearTimeout(timer);
+      st.sent={err:'No pudimos registrar tu pedido en línea. No te preocupes: envíanoslo por WhatsApp con el botón de abajo.'};render();
+    });
+}
+function doTrack(){
+  var T=st.track=st.track||{};
+  T.code=String(T.code||'').trim().toUpperCase();T.tel=String(T.tel||'').replace(/\D/g,'');
+  if(!T.code||T.tel.length!==4){T.err='Completa el código y los 4 dígitos.';T.res=null;render();return}
+  if(!CFG.apiUrl){T.err='La consulta en línea aún no está disponible. Escríbenos por WhatsApp.';render();return}
+  T.busy=true;T.err='';T.res=null;render();
+  fetch(CFG.apiUrl+'?action=status&code='+encodeURIComponent(T.code)+'&tel='+T.tel).then(function(r){return r.json()}).then(function(res){
+    T.busy=false;if(res.ok)T.res=res;else T.err=res.error||'No encontramos ese pedido.';render();
+  }).catch(function(){T.busy=false;T.err='No pudimos consultar ahora. Intenta en un momento o escríbenos por WhatsApp.';render()});
 }
 
 /* ---------- events ---------- */
@@ -218,8 +275,11 @@ app.addEventListener('click',function(e){
   if(a==='toCart'){st.step='cart';render();return}
   if(a==='method'){st.form.method=v;saveForm();render();return}
   if(a==='confirm'){confirmOrder();return}
+  if(a==='submitOrder'){submitOrder();return}
+  if(a==='doTrack'){doTrack();return}
+  if(a==='track'){st.drawer=true;st.step='track';st.track=st.track||{};render();return}
   if(a==='copy'){copyText(v==='__msg'?buildMsg(st.order):v);return}
-  if(a==='newOrder'){cart={};saveCart();st.order=null;st.form.op='';st.step='cart';st.drawer=false;render();return}
+  if(a==='newOrder'){if(st.sent&&st.sent.ok){cart={};saveCart()}st.order=null;st.sent={};st.form.op='';st.step='cart';st.drawer=false;render();return}
   if(a==='toggleAdmin'){st.view=st.view==='admin'?'store':'admin';st.drawer=false;render();window.scrollTo(0,0);return}
   adminClick(a,el,e);
 });
@@ -230,6 +290,7 @@ app.addEventListener('input',function(e){
   if(t.dataset.f){st.form[t.dataset.f]=t.value;saveForm();
     if(t.dataset.f==='op'&&st.order){var a=$('#walink');if(a&&S.whatsapp)a.href='https://wa.me/'+String(S.whatsapp).replace(/\D/g,'')+'?text='+encodeURIComponent(buildMsg(st.order));var m=$('#msgtxt');if(m)m.textContent=buildMsg(st.order)}
     return}
+  if(t.dataset.t){st.track=st.track||{};st.track[t.dataset.t]=t.value;return}
   if(t.id==='pasteMsg')AD.paste=t.value;
 });
 app.addEventListener('change',function(e){var t=e.target;if(t.dataset.f){st.form[t.dataset.f]=t.value;saveForm();if(t.tagName==='SELECT')render();return}adminChange(t)});
