@@ -4,7 +4,7 @@ window.ABAS_CONFIG = {
   // Mientras esté vacío, la web muestra el catálogo de respaldo incluido en index.html.
   sheetCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRm7CBY9jbYeAg1V1Xnoyw-DfZl2fh5VJYexY1JpwdQhTEuFFk7ut7TZYZyPXjk0PDoc6ldsJzfy_yY/pub?gid=2082516956&single=true&output=csv",
   // URL de la aplicación web de Apps Script (registro y consulta de pedidos).
-  apiUrl: "",
+  apiUrl: "https://script.google.com/macros/s/AKfycbzQxekZaPnqyYe2CRrFXMpKt2gIm62l3okxUdP540Uu_O3aXN8z9jTuu5tOyjOj5V_g7A/exec",
   franjas: ["Mañana (9 a 12)", "Tarde (12 a 4)", "Noche (4 a 8)"],
   settings: {
     storeName: "ABAS-TCT",
