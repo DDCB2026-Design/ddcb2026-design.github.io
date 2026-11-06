@@ -187,9 +187,9 @@ function drawer(){
     var o=st.order,sent=st.sent||{};
     var wa=S.whatsapp?waLink(buildMsg(o)):'';
     body='<div class="yape"><span class="eyebrow">Pedido '+esc(o.code)+'</span><div>Paga exactamente</div><div class="amt num">'+money(o.total)+'</div>'+
-      (S.yapeQR?'<img src="'+esc(S.yapeQR)+'" alt="Código QR de Yape">':'')+
+      (S.yapeQR?'<img src="'+esc(S.yapeQR)+'" alt="Código QR para pagar con Plin"><div class="note" style="margin-top:-4px">Escanea con Plin o la app de tu banco</div>':'')+
       (S.yapeNumber?'<div class="copyrow"><code class="num">'+esc(S.yapeNumber)+'</code><button class="btn sm" data-act="copy" data-v="'+esc(S.yapeNumber)+'">Copiar número</button></div>':'<p class="note">El número para pagar aún no está configurado.</p>')+
-      '<div class="note">Desde Yape o Plin al mismo número'+(S.yapeName?' · a nombre de <b>'+esc(S.yapeName)+'</b>':'')+'</div>'+'</div>';
+      '<div class="note">Desde Yape o Plin, paga a este número'+(S.yapeName?' · a nombre de <b>'+esc(S.yapeName)+'</b>':'')+'</div>'+'</div>';
     if(sent.ok){
       body+='<div class="yape" style="border-color:var(--c3);text-align:left"><span class="eyebrow" style="color:var(--c3)">Pedido registrado ✓</span><div>Tu pedido <b>'+esc(sent.code)+'</b> quedó registrado con entrega estimada el <b>'+esc(sent.entrega||fmtDay(deliveryDate()))+'</b>.</div><div class="note">Último paso: envíanos la captura de tu Yape por WhatsApp. Te confirmaremos el pago, el día y la franja de entrega por ese medio. Guarda tu código para consultar el estado en "Mi pedido".</div></div>';
       foot=(wa?'<a class="btn primary" style="background:var(--wa);border-color:var(--wa)" href="'+esc(wa)+'" target="_blank" rel="noopener">Enviar captura por WhatsApp</a>':'')+'<button class="btn ghost" data-act="newOrder">Terminar</button>';
