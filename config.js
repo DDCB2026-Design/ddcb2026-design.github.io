@@ -2,7 +2,7 @@
 window.ABAS_CONFIG = {
   // Enlace CSV de la pestaña "Tienda" publicada en la web desde Google Sheets.
   // Mientras esté vacío, la web muestra el catálogo de respaldo incluido en index.html.
-  sheetCsvUrl: "",
+  sheetCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRm7CBY9jbYeAg1V1Xnoyw-DfZl2fh5VJYexY1JpwdQhTEuFFk7ut7TZYZyPXjk0PDoc6ldsJzfy_yY/pub?gid=2082516956&single=true&output=csv",
   settings: {
     storeName: "ABAS-TCT",
     tagline: "Frutos secos frescos, directo a tu casa",
