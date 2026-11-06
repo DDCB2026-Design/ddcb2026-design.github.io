@@ -144,7 +144,8 @@ var CFG=window.ABAS_CONFIG||{};
 var FRANJAS=CFG.franjas||['Mañana (9 a 12)','Tarde (12 a 4)','Noche (4 a 8)'];
 var DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 function limaNow(){var d=new Date();return new Date(d.getTime()+d.getTimezoneOffset()*60000-5*3600000)}
-function deliveryDate(){var d=limaNow();d.setHours(12,0,0,0);d.setDate(d.getDate()+1);if(d.getDay()===0)d.setDate(d.getDate()+1);return d}
+var RULES={anticipacion:1,sinReparto:'domingo'};
+function deliveryDate(){var d=limaNow();d.setHours(12,0,0,0);d.setDate(d.getDate()+(Number(RULES.anticipacion)||0));var off=norm(RULES.sinReparto||'').split(' ');for(var i=0;i<7&&off.indexOf(norm(DIAS[d.getDay()]))>=0;i++)d.setDate(d.getDate()+1);return d}
 function fmtDay(d){return DIAS[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}
 function minMissing(){var m=Number(S.minOrder)||0;if(!m)return 0;return r2(Math.max(0,m-(subtotal()+(deliveryCost()||0))))}
 function drawer(){
@@ -179,7 +180,7 @@ function drawer(){
       fld('address','Dirección','text','street-address',F.address,E.address)+
       fld('ref','Referencia (opcional)','text','off',F.ref)+
       '<div class="field"><label for="f-when">Franja preferida</label><select id="f-when" data-f="when"><option value="">Cualquier hora</option>'+FRANJAS.map(function(o){return '<option '+(o===F.when?'selected':'')+' value="'+esc(o)+'">'+esc(o)+'</option>'}).join('')+'</select></div>'+
-      '<div class="yape" style="border-color:var(--c3);padding:10px 12px;text-align:left;gap:4px"><span>Entrega estimada: <b>'+fmtDay(deliveryDate())+'</b></span><span class="note">Repartimos al día siguiente de tu compra (compras del sábado, el lunes). Confirmamos día y franja al validar tu pago.</span></div>'+
+      '<div class="yape" style="border-color:var(--c3);padding:10px 12px;text-align:left;gap:4px"><span>Entrega estimada: <b>'+fmtDay(deliveryDate())+'</b></span><span class="note">Confirmamos día y franja por WhatsApp al validar tu pago.</span></div>'+
       '<div class="field"><label for="f-notes">Comentario (opcional)</label><textarea id="f-notes" data-f="notes" rows="2">'+esc(F.notes)+'</textarea></div>'+
     '</div>';
     foot=totals(sub,del,total)+'<div class="toolbar"><button class="btn ghost" data-act="toCart">Atrás</button><button class="btn primary" style="flex:1" data-act="confirm">Ir a pagar '+money(total)+'</button></div>';
@@ -324,6 +325,21 @@ function loadSheet(){
     DATA.publishedAt=new Date().toISOString();render();
   }).catch(function(){});
 }
+function loadConfig(){
+  if(!CFG.apiUrl)return;
+  fetch(CFG.apiUrl+'?action=config').then(function(r){return r.json()}).then(function(c){
+    if(!c||!c.ok||c.delivery==null)return;
+    S.delivery=Object.assign({},S.delivery||{},{mode:'flat',flat:Number(c.delivery)});
+    S.minOrder=Number(c.minimo)||0;
+    if(c.whatsapp)S.whatsapp=String(c.whatsapp);
+    if(c.pagoNumero)S.yapeNumber=String(c.pagoNumero);
+    if(c.pagoTitular)S.yapeName=String(c.pagoTitular);
+    if(c.franjas&&c.franjas.length)FRANJAS=c.franjas;
+    RULES={anticipacion:c.anticipacion,sinReparto:c.sinReparto};
+    render();
+  }).catch(function(){});
+}
 render();
 loadSheet();
+loadConfig();
 })();

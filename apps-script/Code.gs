@@ -8,14 +8,17 @@
  *   Pedidos     → un pedido por fila. Aquí validas el pago y confirmas fecha y franja.
  *   Detalle     → una fila por producto pedido (se llena sola).
  *   Consolidado → kilos y bolsas por producto para pedir al proveedor, por fecha de entrega.
+ *   Ajustes     → delivery, pedido mínimo, días de reparto, franjas y datos de pago.
+ *                 Edítalos ahí: la web y el script los leen en cada pedido. No hace falta tocar este código.
  */
 
 var TZ = 'America/Lima';
 var TIENDA = 'ABAS-TCT';
-var DELIVERY = 12;      // S/ por pedido (toda Lima Metropolitana)
-var MINIMO = 50;        // S/ mínimo, incluye delivery
+// Valores por defecto. Los que valen son los de la pestaña "Ajustes".
+var DEFAULTS = { delivery: 12, minimo: 50, anticipacion: 1, sinReparto: 'domingo', whatsapp: '51987609561',
+  pagoNumero: '987609561', pagoTitular: 'Dante Daniel Clavijo Bazalar',
+  franjas: ['Mañana (9 a 12)', 'Tarde (12 a 4)', 'Noche (4 a 8)'] };
 var ESTADOS = ['Pago en validación', 'Pago validado', 'Por preparar', 'Preparado', 'En ruta', 'Entregado', 'Observado', 'Pago rechazado', 'Cancelado'];
-var FRANJAS = ['Mañana (9 a 12)', 'Tarde (12 a 4)', 'Noche (4 a 8)'];
 var COLS = ['Fecha pedido', 'Código', 'Cliente', 'Celular', 'Distrito', 'Dirección', 'Referencia', 'Productos',
   'Subtotal', 'Delivery', 'Total', 'Op. Yape', 'Franja preferida', 'Entrega propuesta', 'Estado',
   'Entrega confirmada', 'Franja confirmada', 'Nota al cliente', 'WhatsApp al cliente', 'Comentario cliente',
@@ -32,7 +35,6 @@ function ensureSheets_() {
     p.getRange(1, 1, 1, COLS.length).setValues([COLS]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1b3a8a').setWrap(true);
     p.setFrozenRows(1); p.setFrozenColumns(3);
     p.getRange('O2:O').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ESTADOS, true).build());
-    p.getRange('Q2:Q').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(FRANJAS, true).build());
     p.getRange('P2:P').setDataValidation(SpreadsheetApp.newDataValidation().requireDate().build()).setNumberFormat('ddd dd/mm/yyyy');
     p.getRange('N2:N').setNumberFormat('ddd dd/mm/yyyy');
     p.getRange('A2:A').setNumberFormat('dd/mm/yyyy HH:mm');
@@ -41,6 +43,24 @@ function ensureSheets_() {
     p.getRange('R2:R').setBackground('#fff4d6');
     [130, 120, 160, 100, 110, 220, 160, 320, 80, 70, 80, 90, 120, 110, 140, 120, 120, 200, 200, 200, 220, 200]
       .forEach(function (w, i) { p.setColumnWidth(i + 1, w); });
+  }
+  var a = ss.getSheetByName('Ajustes');
+  if (!a) {
+    a = ss.insertSheet('Ajustes');
+    a.getRange('A1:C1').setValues([['Parámetro', 'Valor', 'Nota']]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1b3a8a');
+    a.getRange('A2:C8').setValues([
+      ['Delivery (S/)', DEFAULTS.delivery, 'Costo de envío por pedido a toda Lima Metropolitana'],
+      ['Pedido mínimo (S/)', DEFAULTS.minimo, 'Incluye el delivery. Ej: 50 = S/ 38 de productos + S/ 12 de envío'],
+      ['Días de anticipación', DEFAULTS.anticipacion, '1 = se entrega al día siguiente de la compra'],
+      ['Días sin reparto', DEFAULTS.sinReparto, 'Separados por coma. Ej: domingo  ·  domingo, feriado se maneja a mano'],
+      ['WhatsApp de la tienda', "'" + DEFAULTS.whatsapp, 'Con 51 adelante'],
+      ['Número para pagos', "'" + DEFAULTS.pagoNumero, 'Yape o Plin'],
+      ['Titular de la cuenta', DEFAULTS.pagoTitular, 'Se muestra al cliente al pagar']]);
+    a.getRange('A10').setValue('Franjas horarias (una por fila)').setFontWeight('bold');
+    a.getRange(11, 1, DEFAULTS.franjas.length, 1).setValues(DEFAULTS.franjas.map(function (f) { return [f]; }));
+    a.getRange('B2:B8').setBackground('#fff4d6'); a.getRange('A11:A16').setBackground('#fff4d6');
+    a.setColumnWidth(1, 240); a.setColumnWidth(2, 220); a.setColumnWidth(3, 420);
+    p.getRange('Q2:Q').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(a.getRange('A11:A16'), true).setAllowInvalid(true).build());
   }
   var d = ss.getSheetByName('Detalle');
   if (!d) {
@@ -65,6 +85,25 @@ function ensureSheets_() {
   return { p: p, d: d };
 }
 
+/* Lee la pestaña "Ajustes" (con valores por defecto si falta algo). */
+function getSettings_() {
+  var a = SpreadsheetApp.getActive().getSheetByName('Ajustes');
+  var s = JSON.parse(JSON.stringify(DEFAULTS));
+  if (!a) return s;
+  var v = a.getRange('B2:B8').getValues().map(function (r) { return r[0]; });
+  var num = function (x, def) { var n = Number(String(x).replace(',', '.')); return isNaN(n) || String(x) === '' ? def : n; };
+  s.delivery = num(v[0], s.delivery);
+  s.minimo = num(v[1], s.minimo);
+  s.anticipacion = Math.max(0, Math.round(num(v[2], s.anticipacion)));
+  s.sinReparto = String(v[3] || '');
+  if (v[4]) s.whatsapp = String(v[4]).replace(/\D/g, '');
+  if (v[5]) s.pagoNumero = String(v[5]).replace(/\D/g, '');
+  if (v[6]) s.pagoTitular = String(v[6]);
+  var f = a.getRange('A11:A16').getValues().map(function (r) { return String(r[0]).trim(); }).filter(String);
+  if (f.length) s.franjas = f;
+  return s;
+}
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -74,6 +113,7 @@ function doPost(e) {
     var tel = String(o.phone || '').replace(/\D/g, '').slice(-9);
     if (!o.customer || tel.length !== 9 || !o.items || !o.items.length || !o.address) return out_({ ok: false, error: 'Faltan datos del pedido' });
     var sh = ensureSheets_();
+    var cfg = getSettings_(), DELIVERY = cfg.delivery, MINIMO = cfg.minimo;
     var prices = priceMap_(), sub = 0, issues = [], lines = [];
     o.items.forEach(function (it) {
       var qty = Math.max(1, Math.round(Number(it.qty) || 0)), g = Math.round(Number(it.g) || 0);
@@ -87,7 +127,7 @@ function doPost(e) {
     if (total < MINIMO) issues.push('Bajo el mínimo de S/ ' + MINIMO);
     if (o.total != null && Math.abs(Number(o.total) - total) > 0.01) issues.push('La web calculó S/ ' + o.total);
     var code = uniqueCode_(sh.p, String(o.code || '').replace(/[^\w-]/g, '') || ('FS-' + Utilities.formatDate(new Date(), TZ, 'MMdd') + '-' + Math.floor(1000 + Math.random() * 9000)));
-    var now = new Date(), prop = proposedDate_(now);
+    var now = new Date(), prop = proposedDate_(now, cfg);
     var row = sh.p.getLastRow() + 1;
     var text = lines.map(function (l) { return l.qty + ' × ' + l.name + ' ' + gLabel_(l.g); }).join('\n');
     sh.p.getRange(row, 1, 1, 18).setValues([[now, code, String(o.customer).slice(0, 80), "'" + tel, String(o.district || '').slice(0, 60),
@@ -116,6 +156,7 @@ function doPost(e) {
 
 function doGet(e) {
   var q = (e && e.parameter) || {};
+  if (q.action === 'config') { ensureSheets_(); var c = getSettings_(); c.ok = true; return out_(c); }
   if (q.action !== 'status') return out_({ ok: true, tienda: TIENDA });
   var code = String(q.code || '').trim().toUpperCase(), tel4 = String(q.tel || '').replace(/\D/g, '').slice(-4);
   var p = SpreadsheetApp.getActive().getSheetByName('Pedidos');
@@ -168,11 +209,14 @@ function priceMap_() {
   }
   return m;
 }
-function proposedDate_(now) {
+function proposedDate_(now, cfg) {
+  cfg = cfg || getSettings_();
   var ymd = Utilities.formatDate(now, TZ, 'yyyy-MM-dd').split('-');
   var d = new Date(Number(ymd[0]), Number(ymd[1]) - 1, Number(ymd[2]), 12, 0, 0);
-  d.setDate(d.getDate() + 1);                 // entrega al día siguiente
-  if (d.getDay() === 0) d.setDate(d.getDate() + 1); // domingo → lunes (compras de sábado)
+  d.setDate(d.getDate() + cfg.anticipacion);
+  var dias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  var off = norm_(cfg.sinReparto).split(/[ ,;]+/).filter(String);
+  for (var i = 0; i < 7 && off.indexOf(dias[d.getDay()]) >= 0; i++) d.setDate(d.getDate() + 1);
   return d;
 }
 function uniqueCode_(p, code) {
