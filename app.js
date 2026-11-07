@@ -93,7 +93,7 @@ var IC={
 };
 function storeView(){
   var d=S.delivery||{};
-  var delTxt=d.mode==='district'?'Delivery según distrito':'Delivery '+money(d.flat)+' a toda Lima Metropolitana';
+  var delTxt=d.mode==='district'&&(d.districts||[]).length?'Delivery desde '+money(Math.min.apply(null,d.districts.map(function(z){return Number(z.cost)||0})))+' a toda Lima Metropolitana':'Delivery '+money(d.flat)+' a toda Lima Metropolitana';
   var cs=cats();
   var tiles='<div class="wrap tiles" role="group" aria-label="Categorías">'+['Todas'].concat(cs).map(function(c){
     var img=c==='Todas'?S.heroImg:(S.catImgs||{})[c],n=c==='Todas'?PRODUCTS.length:PRODUCTS.filter(function(p){return p.cat===c}).length;
@@ -147,7 +147,8 @@ function limaNow(){var d=new Date();return new Date(d.getTime()+d.getTimezoneOff
 var RULES={anticipacion:1,sinReparto:'domingo'};
 function deliveryDate(){var d=limaNow();d.setHours(12,0,0,0);d.setDate(d.getDate()+(Number(RULES.anticipacion)||0));var off=norm(RULES.sinReparto||'').split(' ');for(var i=0;i<7&&off.indexOf(norm(DIAS[d.getDay()]))>=0;i++)d.setDate(d.getDate()+1);return d}
 function fmtDay(d){return DIAS[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}
-function minMissing(){var m=Number(S.minOrder)||0;if(!m)return 0;return r2(Math.max(0,m-(subtotal()+(deliveryCost()||0))))}
+function minDel(){var d=S.delivery||{};if(d.mode==='district'&&(d.districts||[]).length)return Math.min.apply(null,d.districts.map(function(z){return Number(z.cost)||0}));return Number(d.flat)||0}
+function minMissing(){var m=Number(S.minOrder)||0;if(!m)return 0;var dc=deliveryCost();return r2(Math.max(0,m-(subtotal()+(dc!=null?dc:minDel()))))}
 function drawer(){
   var title={cart:'Tu pedido',form:'Datos de entrega',yape:'Paga con Yape o Plin',track:'Consulta tu pedido'}[st.step]||'Tu pedido';
   var body='',foot='';
@@ -175,7 +176,7 @@ function drawer(){
     body='<div class="form">'+
       fld('name','Nombre y apellido','text','name',F.name,E.name)+
       fld('phone','Celular (WhatsApp)','tel','tel',F.phone,E.phone)+
-      (d.mode==='district'?'<div class="field"><label for="f-district">Distrito</label><select id="f-district" data-f="district"><option value="">Elige tu distrito</option>'+(d.districts||[]).map(function(z){return '<option '+(z.name===F.district?'selected':'')+' value="'+esc(z.name)+'">'+esc(z.name)+' · '+money(z.cost)+'</option>'}).join('')+'</select>'+(E.district?'<span class="err">'+esc(E.district)+'</span>':'')+'</div>'
+      (d.mode==='district'?'<div class="field"><label for="f-district">Distrito</label><select id="f-district" data-f="district"><option value="">Elige tu distrito</option>'+(d.districts||[]).map(function(z){return '<option '+(z.name===F.district?'selected':'')+' value="'+esc(z.name)+'">'+esc(z.name)+'</option>'}).join('')+'</select>'+(E.district?'<span class="err">'+esc(E.district)+'</span>':'')+'<span class="note">'+(deliveryCost()!=null?'Delivery a tu distrito: <b>'+money(deliveryCost())+'</b>':'El costo de delivery depende de tu distrito.')+' ¿No está tu distrito? Escríbenos por WhatsApp.</span></div>'
           :fld('district','Distrito','text','address-level2',F.district,E.district))+
       fld('address','Dirección','text','street-address',F.address,E.address)+
       fld('ref','Referencia (opcional)','text','off',F.ref)+
@@ -207,7 +208,7 @@ function drawer(){
   return '<div class="scrim" data-act="closeCart"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><header><h2>'+esc(title)+'</h2><button class="btn ghost sm" data-act="closeCart" aria-label="Cerrar">Cerrar</button></header><div class="scroll">'+body+'</div>'+(foot?'<footer>'+foot+'</footer>':'')+'</aside>';
 }
 function fld(k,label,type,ac,v,err){return '<div class="field"><label for="f-'+k+'">'+esc(label)+'</label><input id="f-'+k+'" type="'+type+'" autocomplete="'+ac+'" data-f="'+k+'" value="'+esc(v)+'">'+(err?'<span class="err">'+esc(err)+'</span>':'')+'</div>'}
-function totals(sub,del,total){return '<div class="tot num"><span>Productos</span><span>'+money(sub)+'</span><span>Delivery</span><span>'+(del==null?'Elige distrito':money(del))+'</span><span class="big">Total</span><span class="big">'+money(total)+'</span></div>'}
+function totals(sub,del,total){return '<div class="tot num"><span>Productos</span><span>'+money(sub)+'</span><span>Delivery</span><span>'+(del==null?'desde '+money(minDel()):money(del))+'</span><span class="big">Total'+(del==null?' desde':'')+'</span><span class="big">'+money(del==null?sub+minDel():total)+'</span></div>'}
 
 function makeCode(){var d=limaNow();return 'FS-'+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+Math.floor(1000+Math.random()*9000)}
 function buildMsg(o){
@@ -335,6 +336,7 @@ function loadConfig(){
     if(c.pagoNumero)S.yapeNumber=String(c.pagoNumero);
     if(c.pagoTitular)S.yapeName=String(c.pagoTitular);
     if(c.franjas&&c.franjas.length)FRANJAS=c.franjas;
+    if(c.districts&&c.districts.length)S.delivery={mode:'district',flat:Number(c.delivery),districts:c.districts.map(function(z){return {name:z.name,cost:Number(z.cost)}})};
     RULES={anticipacion:c.anticipacion,sinReparto:c.sinReparto};
     render();
   }).catch(function(){});

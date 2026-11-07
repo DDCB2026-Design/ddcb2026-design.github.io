@@ -172,6 +172,13 @@ function getSettings_() {
   if (v[5]) s.pagoNumero = String(v[5]).replace(/\D/g, '');
   if (v[6]) s.pagoTitular = String(v[6]);
   s.costoMoto = num(v[7], 0);
+  var zonas = {};
+  a.getRange('E34:G39').getValues().forEach(function (z) { if (z[0]) zonas[String(z[0]).trim()] = { cobro: num(z[1], s.delivery), moto: String(z[2]) === '' ? null : num(z[2], null) }; });
+  var dl = a.getLastRow() >= 34 ? a.getRange(34, 1, a.getLastRow() - 33, 2).getValues() : [];
+  s.districts = dl.filter(function (x) { return String(x[0]).trim(); }).map(function (x) {
+    var z = zonas[String(x[1]).trim()] || { cobro: s.delivery, moto: null };
+    return { name: String(x[0]).trim(), cost: z.cobro, moto: z.moto };
+  });
   var f = a.getRange('A11:A16').getValues().map(function (r) { return String(r[0]).trim(); }).filter(String);
   if (f.length) s.franjas = f;
   return s;
@@ -186,8 +193,12 @@ function doPost(e) {
     var tel = String(o.phone || '').replace(/\D/g, '').slice(-9);
     if (!o.customer || tel.length !== 9 || !o.items || !o.items.length || !o.address) return out_({ ok: false, error: 'Faltan datos del pedido' });
     var sh = ensureSheets_();
-    var cfg = getSettings_(), DELIVERY = cfg.delivery, MINIMO = cfg.minimo;
-    var prices = priceMap_(), cm = costMap_(), sub = 0, issues = [], lines = [];
+    var cfg = getSettings_(), DELIVERY = cfg.delivery, MINIMO = cfg.minimo, MOTO = cfg.costoMoto;
+    var dist = (cfg.districts || []).filter(function (x) { return norm_(x.name) === norm_(o.district); })[0];
+    var distIssue = '';
+    if (dist) { DELIVERY = dist.cost; if (dist.moto != null) MOTO = dist.moto; }
+    else if ((cfg.districts || []).length) distIssue = 'Distrito no está en la lista de Ajustes';
+    var prices = priceMap_(), cm = costMap_(), sub = 0, issues = distIssue ? [distIssue] : [], lines = [];
     o.items.forEach(function (it) {
       var qty = Math.max(1, Math.round(Number(it.qty) || 0)), g = Math.round(Number(it.g) || 0);
       var real = prices[norm_(it.name) + '|' + g];
@@ -209,7 +220,7 @@ function doPost(e) {
     sh.p.getRange(row, 19).setFormula(waFormula_(row));
     sh.p.getRange(row, 20, 1, 3).setValues([[String(o.notes || '').slice(0, 300), stamp_() + ' Pago en validación', issues.join(' · ')]]);
     if (issues.length) sh.p.getRange(row, 22).setBackground('#fde6ec');
-    profitCells_(sh.p, row, cfg.costoMoto);
+    profitCells_(sh.p, row, MOTO);
     var dr = sh.d.getLastRow() + 1;
     var det = lines.map(function (l, i) {
       return [code, now, l.name, l.g, l.qty, r2_(l.g * l.qty / 1000), l.price, r2_(l.price * l.qty), '', '', l.cost, r2_(l.cost * l.qty)];
@@ -230,7 +241,12 @@ function doPost(e) {
 
 function doGet(e) {
   var q = (e && e.parameter) || {};
-  if (q.action === 'config') { ensureSheets_(); var c = getSettings_(); c.ok = true; return out_(c); }
+  if (q.action === 'config') {
+    ensureSheets_(); var c = getSettings_(); c.ok = true;
+    c.districts = (c.districts || []).map(function (d) { return { name: d.name, cost: d.cost }; });  // sin zona ni costo interno
+    delete c.costoMoto;
+    return out_(c);
+  }
   if (q.action !== 'status') return out_({ ok: true, tienda: TIENDA });
   var code = String(q.code || '').trim().toUpperCase(), tel4 = String(q.tel || '').replace(/\D/g, '').slice(-4);
   var p = SpreadsheetApp.getActive().getSheetByName('Pedidos');
@@ -311,6 +327,7 @@ function fmtDate_(d) {
 function out_(x) { return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON); }
 
 /* =================== Análisis de mercado (Campo Grande) =================== */
+var DISTRITOS_INICIAL = [["Ancón", "Zona 2"], ["Ate", "Zona 2"], ["Barranco", "Zona 1"], ["Bellavista", "Zona 2"], ["Breña", "Zona 1"], ["Callao", "Zona 2"], ["Carabayllo", "Zona 2"], ["Carmen de la Legua-Reynoso", "Zona 2"], ["Cercado de Lima", "Zona 1"], ["Chaclacayo", "Zona 2"], ["Chorrillos", "Zona 2"], ["Cieneguilla", "Zona 2"], ["Comas", "Zona 2"], ["El Agustino", "Zona 1"], ["Independencia", "Zona 2"], ["Jesús María", "Zona 1"], ["La Molina", "Zona 2"], ["La Perla", "Zona 2"], ["La Punta", "Zona 2"], ["La Victoria", "Zona 1"], ["Lince", "Zona 1"], ["Los Olivos", "Zona 2"], ["Lurigancho-Chosica", "Zona 2"], ["Lurín", "Zona 2"], ["Magdalena del Mar", "Zona 1"], ["Mi Perú", "Zona 2"], ["Miraflores", "Zona 1"], ["Pachacámac", "Zona 2"], ["Pucusana", "Zona 2"], ["Pueblo Libre", "Zona 1"], ["Puente Piedra", "Zona 2"], ["Punta Hermosa", "Zona 2"], ["Punta Negra", "Zona 2"], ["Rímac", "Zona 1"], ["San Bartolo", "Zona 2"], ["San Borja", "Zona 1"], ["San Isidro", "Zona 1"], ["San Juan de Lurigancho", "Zona 2"], ["San Juan de Miraflores", "Zona 2"], ["San Luis", "Zona 1"], ["San Martín de Porres", "Zona 2"], ["San Miguel", "Zona 1"], ["Santa Anita", "Zona 1"], ["Santa María del Mar", "Zona 2"], ["Santa Rosa", "Zona 2"], ["Santiago de Surco", "Zona 2"], ["Surquillo", "Zona 1"], ["Ventanilla", "Zona 2"], ["Villa El Salvador", "Zona 2"], ["Villa María del Triunfo", "Zona 2"]];
 var MERCADO_FECHA = '07/11/2026';
 var GRAMOS = [100, 250, 500, 1000];
 
@@ -368,6 +385,20 @@ function ensureMercado_() {
     p.getRange(2, 19, f.length, 6).setFormulas(f);
     p.getRange('S2:U').setNumberFormat('"S/ "0.00'); p.getRange('W2:W').setNumberFormat('"S/ "0.00'); p.getRange('X2:X').setNumberFormat('+0%;-0%;0%');
     p.setColumnWidths(19, 6, 105);
+  }
+  if (a && !a.getRange('A32').getValue()) {
+    a.getRange('A32').setValue('Delivery por distrito (la zona es solo interna; el cliente ve su distrito y su costo)').setFontWeight('bold');
+    a.getRange('A33:C33').setValues([['Distrito', 'Zona', 'Delivery cobrado S/']]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1b3a8a');
+    a.getRange(34, 1, DISTRITOS_INICIAL.length, 2).setValues(DISTRITOS_INICIAL);
+    var fz = [];
+    for (var i = 0; i < DISTRITOS_INICIAL.length; i++) { var rr = 34 + i; fz.push(['=IF(A' + rr + '="","",IFERROR(VLOOKUP(B' + rr + ',$E$34:$F$39,2,FALSE),$B$2))']); }
+    a.getRange(34, 3, fz.length, 1).setFormulas(fz).setNumberFormat('"S/ "0.00');
+    a.getRange(34, 1, DISTRITOS_INICIAL.length, 2).setBackground('#fff4d6');
+    a.getRange('E33:G33').setValues([['Zona', 'Delivery cobrado S/', 'Costo motorizado estimado S/']]).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1b3a8a');
+    a.getRange('E34:G35').setValues([['Zona 1', 12, ''], ['Zona 2', 18, '']]);
+    a.getRange('F34:G39').setBackground('#fff4d6'); a.getRange('E34:E39').setBackground('#fff4d6');
+    a.getRange('E41').setValue('Para agregar un distrito: escríbelo al final de la lista y elige su zona. Costo motorizado vacío = se usa el de la fila 9.').setFontColor('#5d6577');
+    a.setColumnWidth(5, 110); a.setColumnWidth(6, 150); a.setColumnWidth(7, 200);
   }
   return m;
 }
