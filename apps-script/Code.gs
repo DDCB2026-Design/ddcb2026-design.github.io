@@ -9,6 +9,7 @@
  *   Detalle     → una fila por producto pedido (se llena sola).
  *   Consolidado → kilos y bolsas por producto para pedir al proveedor, por fecha de entrega.
  *   Resumen     → ventas, costos y ganancia del mes.
+ *   Mercado     → precios de Campo Grande para sugerir márgenes (menú ABAS-TCT › Actualizar precios de mercado).
  *   Ajustes     → delivery, pedido mínimo, días de reparto, franjas y datos de pago.
  *                 Edítalos ahí: la web y el script los leen en cada pedido. No hace falta tocar este código.
  */
@@ -86,6 +87,7 @@ function ensureSheets_() {
     c.setColumnWidth(1, 220); c.setColumnWidth(7, 220);
   }
   migrate_(p, d, a);
+  ensureMercado_();
   var rs = ss.getSheetByName('Resumen');
   if (!rs) {
     rs = ss.insertSheet('Resumen');
@@ -307,3 +309,141 @@ function fmtDate_(d) {
   return dias[d.getDay()] + ' ' + Utilities.formatDate(d, TZ, 'dd/MM');
 }
 function out_(x) { return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON); }
+
+/* =================== Análisis de mercado (Campo Grande) =================== */
+var MERCADO_FECHA = '07/11/2026';
+var GRAMOS = [100, 250, 500, 1000];
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('ABAS-TCT')
+    .addItem('Actualizar precios de mercado ahora', 'actualizarMercado')
+    .addItem('Aplicar márgenes sugeridos', 'aplicarMargenes')
+    .addSeparator()
+    .addItem('Activar actualización semanal (lunes 6 a. m.)', 'activarSemanal')
+    .addToUi();
+}
+
+/* Crea la pestaña Mercado, las filas de estrategia en Ajustes y las columnas de sugerencia en Productos. */
+function ensureMercado_() {
+  var ss = SpreadsheetApp.getActive();
+  var m = ss.getSheetByName('Mercado');
+  if (!m) {
+    m = ss.insertSheet('Mercado');
+    m.getRange(1, 1, 1, 8).setValues([['Mi producto', 'URL Campo Grande', '100 g', '250 g', '500 g', '1 kg', 'Actualizado', 'Estado']])
+      .setFontWeight('bold').setFontColor('#ffffff').setBackground('#1b3a8a');
+    m.setFrozenRows(1);
+    var rows = MERCADO_INICIAL.map(function (r) { return [r[0], r[1], r[2] || '', r[3] || '', r[4] || '', r[5] || '', MERCADO_FECHA, 'Carga inicial']; });
+    m.getRange(2, 1, rows.length, 8).setValues(rows);
+    m.getRange('C2:F').setNumberFormat('"S/ "0.00');
+    m.setColumnWidth(1, 200); m.setColumnWidth(2, 380);
+    m.getRange(rows.length + 3, 1).setValue('Para comparar un producto nuevo: escribe su nombre exacto (como en Productos) y pega la URL del producto en Campo Grande.').setFontColor('#5d6577');
+  }
+  var a = ss.getSheetByName('Ajustes');
+  if (a && !a.getRange('A18').getValue()) {
+    a.getRange('A18').setValue('Estrategia de precios (análisis de mercado)').setFontWeight('bold');
+    a.getRange('A19:C23').setValues([
+      ['Competidor de referencia', 'Campo Grande', 'Se actualiza desde la pestaña Mercado (menú ABAS-TCT)'],
+      ['Precio bajo el mercado (%)', 5, 'Cuánto más barato que Campo Grande quieres estar'],
+      ['Margen mínimo (%)', 15, 'Nunca sugerir menos que esto sobre el costo'],
+      ['Margen máximo (%)', 60, 'Nunca sugerir más que esto sobre el costo'],
+      ['Aplicar márgenes sugeridos automáticamente', 'NO', 'SI = cada actualización semanal copia el margen sugerido a la columna Margen %']]);
+    a.getRange('A25').setValue('Margen cuando no hay precio de mercado (por categoría)').setFontWeight('bold');
+    a.getRange('A26:B30').setValues([['Frutos secos', 25], ['Pasas y deshidratados', 30], ['Semillas y granos', 35], ['Especias', 40], ['Conservas', 25]]);
+    a.getRange('B20:B23').setBackground('#fff4d6'); a.getRange('B26:B30').setBackground('#fff4d6');
+  }
+  var p = ss.getSheetByName('Productos');
+  if (p && !p.getRange('S1').getValue()) {
+    p.getRange('S1:X1').setValues([['Mercado pres. 1', 'Mercado pres. 2', 'Mercado pres. 3', 'Margen sugerido %', 'Precio sugerido pres. 1', 'Tu precio vs mercado']])
+      .setFontWeight('bold').setFontColor('#ffffff').setBackground('#0e7c86').setWrap(true);
+    var n = Math.max(150, p.getLastRow());
+    var f = [];
+    for (var r = 2; r <= n + 1; r++) {
+      var mk = function (col) { return '=IF(OR($C' + r + '="",' + col + r + '=""),"",IFERROR(1/(1/INDEX(Mercado!$C:$F,MATCH($C' + r + ',Mercado!$A:$A,0),MATCH(' + col + r + ',{100,250,500,1000},0))),""))'; };
+      var c = function (mcol, gcol) { return 'IF(OR(' + mcol + r + '="",' + gcol + r + '=""),1E9,(' + mcol + r + '*(1-Ajustes!$B$20/100)/($I' + r + '*' + gcol + r + '/1000+N($N' + r + '))-1)*100)'; };
+      f.push([mk('K'), mk('L'), mk('M'),
+        '=IF(OR($C' + r + '="",$I' + r + '=""),"",LET(x,MIN(' + c('S', 'K') + ',' + c('T', 'L') + ',' + c('U', 'M') + '),IF(x>=1E8,IFERROR(VLOOKUP($B' + r + ',Ajustes!$A$26:$B$30,2,FALSE),30),ROUND(MIN(MAX(x,Ajustes!$B$21),Ajustes!$B$22),0))))',
+        '=IF(V' + r + '="","",CEILING(($I' + r + '*K' + r + '/1000+N($N' + r + '))*(1+V' + r + '/100),0.5))',
+        '=IF(OR(O' + r + '="",S' + r + '=""),"",O' + r + '/S' + r + '-1)']);
+    }
+    p.getRange(2, 19, f.length, 6).setFormulas(f);
+    p.getRange('S2:U').setNumberFormat('"S/ "0.00'); p.getRange('W2:W').setNumberFormat('"S/ "0.00'); p.getRange('X2:X').setNumberFormat('+0%;-0%;0%');
+    p.setColumnWidths(19, 6, 105);
+  }
+  return m;
+}
+
+/* Lee los precios actuales de cada URL de la pestaña Mercado. */
+function actualizarMercado() {
+  ensureSheets_();
+  var m = ensureMercado_();
+  var last = m.getLastRow();
+  var v = m.getRange(2, 1, Math.max(1, last - 1), 2).getValues();
+  var idx = [], reqs = [];
+  v.forEach(function (row, i) {
+    if (row[0] && /^https?:\/\//.test(String(row[1]))) {
+      idx.push(i);
+      reqs.push({ url: String(row[1]), muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ABAS-TCT precios)' } });
+    }
+  });
+  var ok = 0, fail = 0, now = Utilities.formatDate(new Date(), TZ, 'dd/MM/yyyy HH:mm');
+  for (var b = 0; b < reqs.length; b += 15) {
+    var res = UrlFetchApp.fetchAll(reqs.slice(b, b + 15));
+    res.forEach(function (resp, k) {
+      var r = idx[b + k] + 2, prices = null;
+      try { if (resp.getResponseCode() === 200) prices = parseVariaciones_(resp.getContentText()); } catch (e) {}
+      if (prices) {
+        m.getRange(r, 3, 1, 6).setValues([[prices[100] || '', prices[250] || '', prices[500] || '', prices[1000] || '', now, 'OK']]);
+        ok++;
+      } else {
+        m.getRange(r, 7, 1, 2).setValues([[now, 'No se pudo leer (HTTP ' + resp.getResponseCode() + ')']]);
+        fail++;
+      }
+    });
+    Utilities.sleep(800);
+  }
+  var a = SpreadsheetApp.getActive().getSheetByName('Ajustes');
+  if (a && /^s[ií]/i.test(String(a.getRange('B23').getValue()))) aplicarMargenes_(false);
+  SpreadsheetApp.getActive().toast('Precios de mercado: ' + ok + ' actualizados, ' + fail + ' con error.', 'ABAS-TCT', 8);
+}
+
+function parseVariaciones_(html) {
+  var mt = html.match(/data-product_variations="([^"]*)"/);
+  if (!mt) return null;
+  var json = mt[1].replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  var vars = JSON.parse(json), out = {}, n = 0;
+  vars.forEach(function (v) {
+    var lab = Object.keys(v.attributes || {}).map(function (k) { return v.attributes[k]; }).join(' ').toLowerCase();
+    var g = /kg-?\s*1\b/.test(lab) && !/kg-?\s*1\d/.test(lab) ? 1000 : (lab.match(/gr?-?\s*(100|250|500)\b/) || [])[1];
+    g = Number(g);
+    if (GRAMOS.indexOf(g) >= 0 && v.display_price) { out[g] = Number(v.display_price); n++; }
+  });
+  return n ? out : null;
+}
+
+function aplicarMargenes() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.alert('Aplicar márgenes sugeridos', 'Se copiará el "Margen sugerido %" a la columna "Margen %" de todos los productos activos. ¿Continuar?', ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) return;
+  var n = aplicarMargenes_(true);
+  ui.alert(n + ' productos actualizados. Los precios de la web cambiarán en unos minutos.');
+}
+function aplicarMargenes_(interactive) {
+  var p = SpreadsheetApp.getActive().getSheetByName('Productos');
+  if (!p) return 0;
+  var last = p.getLastRow(), act = p.getRange(2, 1, last - 1, 1).getValues(), cur = p.getRange(2, 10, last - 1, 1).getValues(), sug = p.getRange(2, 22, last - 1, 1).getValues(), n = 0;
+  var out = cur.map(function (c, i) {
+    var s = sug[i][0];
+    if (String(act[i][0]).toUpperCase() !== 'NO' && typeof s === 'number' && s !== c[0]) { n++; return [s]; }
+    return [c[0]];
+  });
+  p.getRange(2, 10, out.length, 1).setValues(out);
+  return n;
+}
+
+function activarSemanal() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'actualizarMercado') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('actualizarMercado').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(6).inTimezone(TZ).create();
+  SpreadsheetApp.getUi().alert('Listo: los precios de mercado se actualizarán cada lunes a las 6 a. m.');
+}
+
+var MERCADO_INICIAL = [["Pecana grande", "https://campograndeperu.com/producto/pecana-pelada-grande/", 6.44, 14.62, 27.54, 51.35], ["Pecana mediana", "https://campograndeperu.com/producto/pecana-pelada-mediana/", 6.19, 13.93, 26, 48.75], ["Pecana partida", "https://campograndeperu.com/producto/pecana-partida/", 6.91, 14.39, 26.76, 49.99], ["Nuez pelada", "https://campograndeperu.com/producto/nuez-pelada-de-nogal-mariposa/", 6.27, 13.07, 24.3, 45.39], ["Almendra cruda", "https://campograndeperu.com/producto/almendra-natural/", 5.33, 12.7, 21.96, 41.67], ["Almendra tostada", "https://campograndeperu.com/producto/almendras-tostadas/", 5.92, 13.65, 23.67, 46.1], ["Maní tostado partido", "https://campograndeperu.com/producto/mani-partido/", 1.95, 4.06, 7.5, 13.92], ["Maní bola", "https://campograndeperu.com/producto/mani-tostado/", 2.25, 4.69, 8.65, 16.06], ["Maní salado", "https://campograndeperu.com/producto/mani-con-sal-frito/", 2.1, 4.38, 8.08, 15], ["Pistacho", "https://campograndeperu.com/producto/pistachos-tostados/", 8.75, 20.9, 40, 70.89], ["Cashew crudo", "https://campograndeperu.com/producto/nuez-de-caju-crudo-cashew/", 6.64, 15.56, 29.28, 55.31], ["Cashew tostado", "https://campograndeperu.com/producto/nuez-de-caju-tostado-cashew/", 6.94, 15.77, 28.91, 53.37], ["Castaña amazónica", "https://campograndeperu.com/producto/castana-primera/", 11.54, 26.79, 50, 93.75], ["Semilla de girasol", "https://campograndeperu.com/producto/semilla-de-girasol-crudo/", 3.06, 6.42, 11.71, 22.13], ["Semilla de girasol tostada", "https://campograndeperu.com/producto/semilla-de-girasol-tostado/", 2.88, 6.05, 11.36, 20.83], ["Semilla de calabaza", "https://campograndeperu.com/producto/semilla-de-calabaza-crudo/", 5.36, 11.23, 20.48, 38.68], ["Semilla de calabaza tostada", "https://campograndeperu.com/producto/semilla-de-calabaza-tostado/", 5.81, 12.18, 22.21, 41.96], ["Avellana", "https://campograndeperu.com/producto/avellanas-tostadas/", 10, 22.83, 42.86, 80.77], ["Pasa importada", "https://campograndeperu.com/producto/pasas-morenas-jumbo/", 2.45, 5.62, 10.38, 19.28], ["Pasa bebé", "https://campograndeperu.com/producto/pasas-morenas-chicas/", 2.15, 4.92, 9.22, 17.35], ["Pasa nacional", "https://campograndeperu.com/producto/pasas-morenas/", 2.79, 6.4, 11.82, 22.59], ["Pasa rubia grande", "https://campograndeperu.com/producto/pasas-rubias/", 4.35, 9.18, 17.02, 32.63], ["Pasa rubia bebé", "https://campograndeperu.com/producto/pasas-rubias/", 4.35, 9.18, 17.02, 32.63], ["Guindón sin pepa", "https://campograndeperu.com/producto/guindones-deshidratados-sin-pepa/", 4.06, 8.27, 15.36, 28.67], ["Damasco", "https://campograndeperu.com/producto/damasco-deshidratado/", 7.5, 17.31, 32.14, 56.25], ["Arándano", "https://campograndeperu.com/producto/arandanos-rojos-deshidratados/", 4.04, 8.75, 15.91, 30.01], ["Dátil natural", "https://campograndeperu.com/producto/datiles-medjool-importado/", 2.72, 5.71, 10.41, 19.67], ["Dátil glaseado", "https://campograndeperu.com/producto/datiles-glaseados/", 3.75, 8.52, 15.63, 28.85], ["Huesillo", "https://campograndeperu.com/producto/huesillos/", 5.77, 12.03, 22.21, 41.25], ["Cereza", "https://campograndeperu.com/producto/cereza-deshidratada-sin-pepa/", 5.62, 11.25, 20.77, 38.57], ["Naranja", "https://campograndeperu.com/producto/naranja-deshidratada/", 6.6, 13.75, 25.39, 47.15], ["Manzana", "https://campograndeperu.com/producto/manzana-deshidratada/", 11.16, 25.57, 47.2, 87.66], ["Mango", "https://campograndeperu.com/producto/mango-deshidratado/", 8.7, 18.12, 33.46, 62.14], ["Piña", "https://campograndeperu.com/producto/pina-deshidratada/", 9.2, 19.17, 35.38, 65.71], ["Higo", "https://campograndeperu.com/producto/higos-secos/", 3.3, 6.88, 12.91, 24.29], ["Fresa deshidratada", "https://campograndeperu.com/producto/fresa-deshidratada/", 11.33, 22.84, 42.27, 78.67], ["Aguaymanto", "https://campograndeperu.com/producto/aguaymanto-deshidratado/", 6.9, 14.71, 27.78, 51.95], ["Coco rallado", "https://campograndeperu.com/producto/coco-rallado-largo/", 3.43, 7.87, 14.75, 27.76], ["Coco fino", "https://campograndeperu.com/producto/coco-rallado-fino/", 3.07, 5.99, 11.28, 21.31], ["Guinda", "https://campograndeperu.com/producto/guinda-deshidratada/", 2.83, 5.9, 10.89, 20.23], ["Avena", "https://campograndeperu.com/producto/hojuela-de-avena/", null, null, 3.16, 5.75], ["Ajonjolí crudo", "https://campograndeperu.com/producto/ajonjoli-crudo/", 1.45, 2.82, 5.07, 9.23], ["Ajonjolí tostado", "https://campograndeperu.com/producto/ajonjoli-tostado/", 1.77, 3.62, 6.71, 12.53], ["Ajonjolí negro", "https://campograndeperu.com/producto/ajonjoli-negro/", 2.46, 4.92, 8.43, 15.95], ["Chía", "https://campograndeperu.com/producto/chia-negra/", 2.5, 5.25, 9.55, 17.5], ["Linaza nacional", "https://campograndeperu.com/producto/linaza-nacional/", 2.62, 6.1, 11.42, 21.45], ["Linaza importada", "https://campograndeperu.com/producto/linaza-importada/", 2.24, 4.2, 6.72, 8], ["Quinua", "https://campograndeperu.com/producto/quinua-blanca/", 2.16, 4.52, 8.24, 15.57], ["Flor de Jamaica", "https://campograndeperu.com/producto/flor-de-jamaica-deshidratada/", 3.26, 6.2, 11.27, 20.67], ["Cacao entero", "https://campograndeperu.com/producto/grano-de-cacao/", 5.7, 11.49, 21.27, 39.58], ["Cáscara de cacao", "https://campograndeperu.com/producto/cascarilla-de-cacao/", null, 2.29, 3.18, 5.9], ["Canela entera", "https://campograndeperu.com/producto/canela-entera/", 14.29, 30, 54.55, 100.01], ["Canela molida", "https://campograndeperu.com/producto/canela-molida/", 9.44, 19.97, 37.09, 69.23], ["Clavo de olor", "https://campograndeperu.com/producto/clavo-de-olor/", 7.02, 15.58, 28.83, 53.66], ["Anís estrella", "https://campograndeperu.com/producto/anis-estrella/", 6.77, 13.65, 25.26, 47], ["Anís en grano", "https://campograndeperu.com/producto/anis-espanol/", 3.9, 7.87, 14.56, 27.09], ["Laurel", "https://campograndeperu.com/producto/hoja-de-laurel/", 8.19, 18.9, 35.1, 65.51], ["Hongo seco", "https://campograndeperu.com/producto/hongos-secos/", 5.09, 10.77, 20, 37.33], ["Orégano fino", "https://campograndeperu.com/producto/oregano-fino/", 2.95, 5.71, 10.41, 19.67], ["Pimienta entera", "https://campograndeperu.com/producto/pimienta-negra-entera/", 5.18, 11.87, 21.92, 40.71], ["Pimienta molida", "https://campograndeperu.com/producto/pimienta-molida/", 8.5, 14.17, 24.29, 42.51], ["Comino molido", "https://campograndeperu.com/producto/comino-molido/", 3.54, 8.05, 14.75, 27.23], ["Cúrcuma", "https://campograndeperu.com/producto/curcuma-molida/", 2.16, 4.35, 8.05, 14.99], ["Pimentón molido", "https://campograndeperu.com/producto/pimenton-molido/", 2.78, 5.78, 10.67, 19.82], ["Romero molido", "https://campograndeperu.com/producto/romero-seco/", 3.4, 7.14, 13.01, 24.58], ["Orégano molido", "https://campograndeperu.com/producto/oregano-molido/", 3.17, 6.85, 12.72, 23.36], ["Bicarbonato", "https://campograndeperu.com/producto/bicarbonato-de-sodio/", null, null, 3.42, 6.27], ["Panela", "https://campograndeperu.com/producto/panela-granulada-organica/", null, null, 6.04, 11.7]];
