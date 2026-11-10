@@ -13,7 +13,7 @@ function money(n){return 'S/ '+(Number(n)||0).toFixed(2)}
 function slug(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'x'}
 function num(v){if(typeof v==='number')return v;var s=String(v||'').replace(/S\/\.?|s\/\.?|\$|\s/g,'');if(/,\d{1,2}$/.test(s)&&s.indexOf('.')<0)s=s.replace(',','.');s=s.replace(/,/g,'').replace(/^\./,'');var n=parseFloat(s);return isNaN(n)?null:n}
 function norm(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
-function gLabel(g){g=Number(g);return g>=1000?(g/1000).toString().replace('.',',')+' kg':g+' g'}
+function gLabel(g,name){g=Number(g);var p=name&&byId[slug(name)];if(p&&norm(p.cat)==='conservas'&&p.v&&p.v[0]){var b=p.v[0][0],n=g/b;if(n>1&&n===Math.round(n))return 'Pack x'+n}return g>=1000?(g/1000).toString().replace('.',',')+' kg':g+' g'}
 function sentence(s){s=String(s||'').trim().toLowerCase().replace(/\s+/g,' ');return s.charAt(0).toUpperCase()+s.slice(1)}
 
 var DATA;
@@ -130,10 +130,10 @@ function card(p){
   return '<article class="card"><div class="ph">'+
     (p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'" loading="lazy">':'<span class="mono" aria-hidden="true">'+esc(mono(p.name))+'</span>')+
     '<span class="kg num">'+perkg+'</span></div><div class="info"><h3>'+esc(p.name)+'</h3>'+(p.desc?'<div class="desc">'+esc(p.desc)+'</div>':'')+
-    (vs.length>1?'<div class="pres" role="group" aria-label="Presentación">'+vs.map(function(x){return '<button data-act="sel" data-id="'+esc(p.id)+'" data-g="'+x[0]+'" aria-pressed="'+(x[0]===g)+'">'+gLabel(x[0])+'</button>'}).join('')+'</div>':'<div class="note">'+gLabel(g)+'</div>')+
+    (vs.length>1?'<div class="pres" role="group" aria-label="Presentación">'+vs.map(function(x){return '<button data-act="sel" data-id="'+esc(p.id)+'" data-g="'+x[0]+'" aria-pressed="'+(x[0]===g)+'">'+gLabel(x[0],p.name)+'</button>'}).join('')+'</div>':'<div class="note">'+gLabel(g,p.name)+'</div>')+
     '<div class="buy"><span class="price num">'+money(v[1])+'</span>'+
     (q?'<span class="qty"><button data-act="dec" data-k="'+esc(key)+'" aria-label="Quitar uno">−</button><span class="num">'+q+'</span><button data-act="inc" data-k="'+esc(key)+'" aria-label="Agregar uno">+</button></span>'
-      :'<button class="add" data-act="inc" data-k="'+esc(key)+'" aria-label="Agregar '+esc(p.name+' '+gLabel(g))+'">Agregar</button>')+
+      :'<button class="add" data-act="inc" data-k="'+esc(key)+'" aria-label="Agregar '+esc(p.name+' '+gLabel(g,p.name))+'">Agregar</button>')+
     '</div></div></article>';
 }
 function cartBar(){return '<div class="cartbar"><button data-act="openCart"><span>Ver mi pedido · <span class="num">'+cartCount()+'</span> producto'+(cartCount()===1?'':'s')+'</span><b class="num">'+money(subtotal())+'</b></button></div>'}
@@ -166,7 +166,7 @@ function drawer(){
         (T.res.nota?'<div class="note">'+esc(T.res.nota)+'</div>':'')+'</div>':'');
     foot='<button class="btn primary" data-act="doTrack" '+(T.busy?'disabled':'')+'>Consultar</button>';
   } else if(st.step==='cart'){
-    body=lines.length?lines.map(function(l){return '<div class="line"><div class="th">'+(l.img?'<img src="'+esc(l.img)+'" alt="">':'')+'</div><div><div class="n">'+esc(l.name)+'</div><div class="m">'+gLabel(l.g)+' · '+money(l.price)+'</div></div>'+
+    body=lines.length?lines.map(function(l){return '<div class="line"><div class="th">'+(l.img?'<img src="'+esc(l.img)+'" alt="">':'')+'</div><div><div class="n">'+esc(l.name)+'</div><div class="m">'+gLabel(l.g,l.name)+' · '+money(l.price)+'</div></div>'+
       '<div style="text-align:right"><span class="step"><button data-act="dec" data-k="'+esc(l.key)+'" aria-label="Quitar uno">−</button><span class="num">'+l.qty+'</span><button data-act="inc" data-k="'+esc(l.key)+'" aria-label="Agregar uno">+</button></span><div class="num" style="font-weight:800;margin-top:4px">'+money(l.sub)+'</div></div></div>'}).join('')
       :'<p class="empty">Tu carrito está vacío.</p>';
     var miss=minMissing();
@@ -214,7 +214,7 @@ function makeCode(){var d=limaNow();return 'FS-'+String(d.getMonth()+1).padStart
 function buildMsg(o){
   var code=(st.sent&&st.sent.code)||o.code;
   var L=['Hola, envío mi pedido.','Ref: '+code,''];
-  o.items.forEach(function(i){L.push('• '+i.qty+' × '+i.name+' '+gLabel(i.g)+' — '+money(i.sub))});
+  o.items.forEach(function(i){L.push('• '+i.qty+' × '+i.name+' '+gLabel(i.g,i.name)+' — '+money(i.sub))});
   L.push('','Productos: '+money(o.subtotal),'Delivery: '+money(o.delivery),'Total: '+money(o.total),'Pago: Yape/Plin'+(st.form.op?' · Op. '+st.form.op:''),'',
     'Cliente: '+o.customer,'Celular: '+o.phone,'Distrito: '+o.district,'Dirección: '+o.address);
   if(o.ref)L.push('Referencia: '+o.ref);

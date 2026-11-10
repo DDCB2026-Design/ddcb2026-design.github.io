@@ -213,7 +213,8 @@ function doPost(e) {
     var code = uniqueCode_(sh.p, String(o.code || '').replace(/[^\w-]/g, '') || ('FS-' + Utilities.formatDate(new Date(), TZ, 'MMdd') + '-' + Math.floor(1000 + Math.random() * 9000)));
     var now = new Date(), prop = proposedDate_(now, cfg);
     var row = sh.p.getLastRow() + 1;
-    var text = lines.map(function (l) { return l.qty + ' × ' + l.name + ' ' + gLabel_(l.g); }).join('\n');
+    var base = baseMap_();
+    var text = lines.map(function (l) { return l.qty + ' × ' + l.name + ' ' + presLabel_(l.name, l.g, base); }).join('\n');
     sh.p.getRange(row, 1, 1, 18).setValues([[now, code, String(o.customer).slice(0, 80), "'" + tel, String(o.district || '').slice(0, 60),
       String(o.address || '').slice(0, 160), String(o.ref || '').slice(0, 160), text, sub, DELIVERY, total,
       String(o.op || '').slice(0, 30), String(o.when || ''), prop, 'Pago en validación', prop, '', '']]);
@@ -316,6 +317,18 @@ function uniqueCode_(p, code) {
   return c;
 }
 function norm_(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+/* Conservas: la presentación 1 es la unidad; las demás se muestran como "Pack xN". */
+function baseMap_() {
+  var t = SpreadsheetApp.getActive().getSheetByName('Tienda'), m = {};
+  if (!t) return m;
+  t.getDataRange().getValues().slice(1).forEach(function (r) { if (r[2]) m[norm_(r[2])] = { cat: norm_(r[1]), g1: Number(r[5]) || 0 }; });
+  return m;
+}
+function presLabel_(name, g, base) {
+  var b = base[norm_(name)];
+  if (b && b.cat === 'conservas' && b.g1 && g > b.g1 && g % b.g1 === 0) return 'Pack x' + (g / b.g1);
+  return gLabel_(g);
+}
 function gLabel_(g) { return g >= 1000 ? (g / 1000 + ' kg').replace('.', ',') : g + ' g'; }
 function r2_(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function stamp_() { return Utilities.formatDate(new Date(), TZ, 'dd/MM HH:mm'); }
@@ -478,3 +491,45 @@ function activarSemanal() {
 }
 
 var MERCADO_INICIAL = [["Pecana grande", "https://campograndeperu.com/producto/pecana-pelada-grande/", 6.44, 14.62, 27.54, 51.35], ["Pecana mediana", "https://campograndeperu.com/producto/pecana-pelada-mediana/", 6.19, 13.93, 26, 48.75], ["Pecana partida", "https://campograndeperu.com/producto/pecana-partida/", 6.91, 14.39, 26.76, 49.99], ["Nuez pelada", "https://campograndeperu.com/producto/nuez-pelada-de-nogal-mariposa/", 6.27, 13.07, 24.3, 45.39], ["Almendra cruda", "https://campograndeperu.com/producto/almendra-natural/", 5.33, 12.7, 21.96, 41.67], ["Almendra tostada", "https://campograndeperu.com/producto/almendras-tostadas/", 5.92, 13.65, 23.67, 46.1], ["Maní tostado partido", "https://campograndeperu.com/producto/mani-partido/", 1.95, 4.06, 7.5, 13.92], ["Maní bola", "https://campograndeperu.com/producto/mani-tostado/", 2.25, 4.69, 8.65, 16.06], ["Maní salado", "https://campograndeperu.com/producto/mani-con-sal-frito/", 2.1, 4.38, 8.08, 15], ["Pistacho", "https://campograndeperu.com/producto/pistachos-tostados/", 8.75, 20.9, 40, 70.89], ["Cashew crudo", "https://campograndeperu.com/producto/nuez-de-caju-crudo-cashew/", 6.64, 15.56, 29.28, 55.31], ["Cashew tostado", "https://campograndeperu.com/producto/nuez-de-caju-tostado-cashew/", 6.94, 15.77, 28.91, 53.37], ["Castaña amazónica", "https://campograndeperu.com/producto/castana-primera/", 11.54, 26.79, 50, 93.75], ["Semilla de girasol", "https://campograndeperu.com/producto/semilla-de-girasol-crudo/", 3.06, 6.42, 11.71, 22.13], ["Semilla de girasol tostada", "https://campograndeperu.com/producto/semilla-de-girasol-tostado/", 2.88, 6.05, 11.36, 20.83], ["Semilla de calabaza", "https://campograndeperu.com/producto/semilla-de-calabaza-crudo/", 5.36, 11.23, 20.48, 38.68], ["Semilla de calabaza tostada", "https://campograndeperu.com/producto/semilla-de-calabaza-tostado/", 5.81, 12.18, 22.21, 41.96], ["Avellana", "https://campograndeperu.com/producto/avellanas-tostadas/", 10, 22.83, 42.86, 80.77], ["Pasa importada", "https://campograndeperu.com/producto/pasas-morenas-jumbo/", 2.45, 5.62, 10.38, 19.28], ["Pasa bebé", "https://campograndeperu.com/producto/pasas-morenas-chicas/", 2.15, 4.92, 9.22, 17.35], ["Pasa nacional", "https://campograndeperu.com/producto/pasas-morenas/", 2.79, 6.4, 11.82, 22.59], ["Pasa rubia grande", "https://campograndeperu.com/producto/pasas-rubias/", 4.35, 9.18, 17.02, 32.63], ["Pasa rubia bebé", "https://campograndeperu.com/producto/pasas-rubias/", 4.35, 9.18, 17.02, 32.63], ["Guindón sin pepa", "https://campograndeperu.com/producto/guindones-deshidratados-sin-pepa/", 4.06, 8.27, 15.36, 28.67], ["Damasco", "https://campograndeperu.com/producto/damasco-deshidratado/", 7.5, 17.31, 32.14, 56.25], ["Arándano", "https://campograndeperu.com/producto/arandanos-rojos-deshidratados/", 4.04, 8.75, 15.91, 30.01], ["Dátil natural", "https://campograndeperu.com/producto/datiles-medjool-importado/", 2.72, 5.71, 10.41, 19.67], ["Dátil glaseado", "https://campograndeperu.com/producto/datiles-glaseados/", 3.75, 8.52, 15.63, 28.85], ["Huesillo", "https://campograndeperu.com/producto/huesillos/", 5.77, 12.03, 22.21, 41.25], ["Cereza", "https://campograndeperu.com/producto/cereza-deshidratada-sin-pepa/", 5.62, 11.25, 20.77, 38.57], ["Naranja", "https://campograndeperu.com/producto/naranja-deshidratada/", 6.6, 13.75, 25.39, 47.15], ["Manzana", "https://campograndeperu.com/producto/manzana-deshidratada/", 11.16, 25.57, 47.2, 87.66], ["Mango", "https://campograndeperu.com/producto/mango-deshidratado/", 8.7, 18.12, 33.46, 62.14], ["Piña", "https://campograndeperu.com/producto/pina-deshidratada/", 9.2, 19.17, 35.38, 65.71], ["Higo", "https://campograndeperu.com/producto/higos-secos/", 3.3, 6.88, 12.91, 24.29], ["Fresa deshidratada", "https://campograndeperu.com/producto/fresa-deshidratada/", 11.33, 22.84, 42.27, 78.67], ["Aguaymanto", "https://campograndeperu.com/producto/aguaymanto-deshidratado/", 6.9, 14.71, 27.78, 51.95], ["Coco rallado", "https://campograndeperu.com/producto/coco-rallado-largo/", 3.43, 7.87, 14.75, 27.76], ["Coco fino", "https://campograndeperu.com/producto/coco-rallado-fino/", 3.07, 5.99, 11.28, 21.31], ["Guinda", "https://campograndeperu.com/producto/guinda-deshidratada/", 2.83, 5.9, 10.89, 20.23], ["Avena", "https://campograndeperu.com/producto/hojuela-de-avena/", null, null, 3.16, 5.75], ["Ajonjolí crudo", "https://campograndeperu.com/producto/ajonjoli-crudo/", 1.45, 2.82, 5.07, 9.23], ["Ajonjolí tostado", "https://campograndeperu.com/producto/ajonjoli-tostado/", 1.77, 3.62, 6.71, 12.53], ["Ajonjolí negro", "https://campograndeperu.com/producto/ajonjoli-negro/", 2.46, 4.92, 8.43, 15.95], ["Chía", "https://campograndeperu.com/producto/chia-negra/", 2.5, 5.25, 9.55, 17.5], ["Linaza nacional", "https://campograndeperu.com/producto/linaza-nacional/", 2.62, 6.1, 11.42, 21.45], ["Linaza importada", "https://campograndeperu.com/producto/linaza-importada/", 2.24, 4.2, 6.72, 8], ["Quinua", "https://campograndeperu.com/producto/quinua-blanca/", 2.16, 4.52, 8.24, 15.57], ["Flor de Jamaica", "https://campograndeperu.com/producto/flor-de-jamaica-deshidratada/", 3.26, 6.2, 11.27, 20.67], ["Cacao entero", "https://campograndeperu.com/producto/grano-de-cacao/", 5.7, 11.49, 21.27, 39.58], ["Cáscara de cacao", "https://campograndeperu.com/producto/cascarilla-de-cacao/", null, 2.29, 3.18, 5.9], ["Canela entera", "https://campograndeperu.com/producto/canela-entera/", 14.29, 30, 54.55, 100.01], ["Canela molida", "https://campograndeperu.com/producto/canela-molida/", 9.44, 19.97, 37.09, 69.23], ["Clavo de olor", "https://campograndeperu.com/producto/clavo-de-olor/", 7.02, 15.58, 28.83, 53.66], ["Anís estrella", "https://campograndeperu.com/producto/anis-estrella/", 6.77, 13.65, 25.26, 47], ["Anís en grano", "https://campograndeperu.com/producto/anis-espanol/", 3.9, 7.87, 14.56, 27.09], ["Laurel", "https://campograndeperu.com/producto/hoja-de-laurel/", 8.19, 18.9, 35.1, 65.51], ["Hongo seco", "https://campograndeperu.com/producto/hongos-secos/", 5.09, 10.77, 20, 37.33], ["Orégano fino", "https://campograndeperu.com/producto/oregano-fino/", 2.95, 5.71, 10.41, 19.67], ["Pimienta entera", "https://campograndeperu.com/producto/pimienta-negra-entera/", 5.18, 11.87, 21.92, 40.71], ["Pimienta molida", "https://campograndeperu.com/producto/pimienta-molida/", 8.5, 14.17, 24.29, 42.51], ["Comino molido", "https://campograndeperu.com/producto/comino-molido/", 3.54, 8.05, 14.75, 27.23], ["Cúrcuma", "https://campograndeperu.com/producto/curcuma-molida/", 2.16, 4.35, 8.05, 14.99], ["Pimentón molido", "https://campograndeperu.com/producto/pimenton-molido/", 2.78, 5.78, 10.67, 19.82], ["Romero molido", "https://campograndeperu.com/producto/romero-seco/", 3.4, 7.14, 13.01, 24.58], ["Orégano molido", "https://campograndeperu.com/producto/oregano-molido/", 3.17, 6.85, 12.72, 23.36], ["Bicarbonato", "https://campograndeperu.com/producto/bicarbonato-de-sodio/", null, null, 3.42, 6.27], ["Panela", "https://campograndeperu.com/producto/panela-granulada-organica/", null, null, 6.04, 11.7]];
+
+/* ===== Conservas: atún (ejecutar UNA vez desde el editor: agregarConservas) =====
+   Costo por lata = precio de la promoción ÷ 13 (docena + 1 de regalo).
+   Precio de mercado = lata de 140 g en supermercados de Lima (nov. 2026), se actualiza a mano en la columna S.
+   Pres. 1 = 1 lata (140 g) · Pres. 2 = pack de 6 latas (840 g) con 5 % menos que 6 latas sueltas. */
+var CONSERVAS_INICIAL = [
+  // [producto, descripción, foto, costo promo, unidades promo, precio mercado por lata, margen %]
+  ['Atún Real en trozos', 'Trozos de atún en lata de 140 g. Marca Real. Práctico para ensaladas, sánguches, causas y tortillas.', 'atun.jpg', 60.40, 13, 6.20, 27],
+  ['Atún Florida en trozos', 'Trozos de atún en lata de 140 g. Marca Florida. Práctico para ensaladas, sánguches, causas y tortillas.', 'atun.jpg', 60.00, 13, 6.20, 28],
+  ['Atún Florida en filete', 'Filete de atún en lata de 140 g. Marca Florida. Lomo entero, ideal para platos y ensaladas.', 'atun.jpg', 62.80, 13, 6.40, 26]
+];
+var PACK_DESCUENTO = 0.05;
+function agregarConservas() {
+  var ss = SpreadsheetApp.getActive(), p = ss.getSheetByName('Productos');
+  if (!p) throw new Error('No existe la pestaña Productos');
+  ensureMercado_();
+  var names = p.getRange(1, 3, Math.max(p.getMaxRows(), 2), 1).getValues().map(function (r) { return norm_(r[0]); });
+  var free = 2; while (free <= names.length && names[free - 1]) free++;
+  var added = [];
+  CONSERVAS_INICIAL.forEach(function (c) {
+    if (names.indexOf(norm_(c[0])) >= 0) return;
+    var r = free++;
+    var costoLata = c[3] / c[4], costoKg = Math.round(costoLata / 0.14 * 10000) / 10000;
+    p.getRange(r, 1, 1, 8).setValues([['SI', 'Conservas', c[0], c[1], c[2], 'Proveedor conservas', '', costoKg]]);
+    if (!p.getRange(r, 9).getFormula()) p.getRange(r, 9).setFormula('=IF(H' + r + '<>"",H' + r + ',"")');
+    p.getRange(r, 10).setValue(c[6]);
+    p.getRange(r, 11, 1, 4).setValues([[140, 840, '', 0]]);
+    p.getRange(r, 15, 1, 3).setFormulas([[
+      '=IF(OR($C' + r + '="",K' + r + '="",$I' + r + '=""),"",FLOOR($I' + r + '*K' + r + '/1000*(1+$J' + r + '/100)+$N' + r + ',0.1))',
+      '=IF(OR($C' + r + '="",L' + r + '="",$I' + r + '=""),"",FLOOR(($I' + r + '*L' + r + '/1000*(1+$J' + r + '/100)+$N' + r + ')*' + (1 - PACK_DESCUENTO) + ',0.1))',
+      '']]);
+    p.getRange(r, 18).setFormula('=IF(O' + r + '="","",(O' + r + '-($I' + r + '*K' + r + '/1000+$N' + r + '))/O' + r + ')');
+    p.getRange(r, 19).setValue(c[5]).setNote('Precio de referencia por lata en supermercados (Plaza Vea / Tottus / Metro). Actualízalo a mano.');
+    p.getRange(r, 20).setFormula('=IF(S' + r + '="","",S' + r + '*L' + r + '/K' + r + ')');
+    p.getRange(r, 21).setValue('');
+    p.getRange(r, 23).setFormula('=IF(V' + r + '="","",FLOOR(($I' + r + '*K' + r + '/1000+N($N' + r + '))*(1+V' + r + '/100),0.1))');
+    added.push(c[0] + ' (fila ' + r + ')');
+  });
+  var msg = added.length ? 'Agregados: ' + added.join(', ') : 'Los productos de atún ya estaban cargados.';
+  try { SpreadsheetApp.getUi().alert(msg + '\nLa web se actualiza en unos minutos.'); } catch (e) { Logger.log(msg); }
+  return msg;
+}
